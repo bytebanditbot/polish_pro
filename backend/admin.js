@@ -52,23 +52,55 @@ module.exports = function adminRouter(pool) {
     }
   });
 
-  // Allowed: pending/confirmed -> confirmed or cancelled. Cancelled stays cancelled.
+  // pending -> confirmed | cancelled
+  // confirmed -> cancelled
+  // cancelled -> pending (restore, only if the time slot is still free)
   router.patch('/bookings/:id/status', requireAdmin, async (req, res) => {
     const id = Number(req.params.id);
     const { status } = req.body || {};
-    if (!Number.isInteger(id) || !['confirmed', 'cancelled'].includes(status)) {
-      return res.status(400).json({ error: 'status must be "confirmed" or "cancelled"' });
+    if (!Number.isInteger(id) || !['pending', 'confirmed', 'cancelled'].includes(status)) {
+      return res.status(400).json({ error: 'invalid status' });
     }
     try {
+      const current = await pool.query('SELECT status FROM bookings WHERE id = $1', [id]);
+      if (current.rows.length === 0) {
+        return res.status(404).json({ error: 'booking not found' });
+      }
+      const from = current.rows[0].status;
+
+      const allowed =
+        (from === 'pending' && ['confirmed', 'cancelled'].includes(status)) ||
+        (from === 'confirmed' && status === 'cancelled') ||
+        (from === 'cancelled' && status === 'pending');
+      if (!allowed) {
+        return res.status(400).json({ error: `cannot change ${from} to ${status}` });
+      }
+
+      // Restoring: make sure nobody booked the slot in the meantime
+      if (from === 'cancelled') {
+        const conflict = await pool.query(
+          `SELECT 1
+             FROM bookings me
+             JOIN services ms ON ms.id = me.service_id
+             JOIN bookings o ON o.id <> me.id AND o.status <> 'cancelled'
+             JOIN services os ON os.id = o.service_id
+            WHERE me.id = $1
+              AND o.slot_start < me.slot_start + make_interval(mins => ms.duration_min)
+              AND o.slot_start + make_interval(mins => os.duration_min) > me.slot_start
+            LIMIT 1`,
+          [id]
+        );
+        if (conflict.rows.length > 0) {
+          return res.status(409).json({
+            error: 'This time slot has been booked by someone else, so it cannot be restored.',
+          });
+        }
+      }
+
       const { rows } = await pool.query(
-        `UPDATE bookings SET status = $2
-          WHERE id = $1 AND status <> 'cancelled'
-          RETURNING id, status`,
+        'UPDATE bookings SET status = $2 WHERE id = $1 RETURNING id, status',
         [id, status]
       );
-      if (rows.length === 0) {
-        return res.status(404).json({ error: 'booking not found or already cancelled' });
-      }
       res.json(rows[0]);
     } catch {
       res.status(500).json({ error: 'could not update booking' });

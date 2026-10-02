@@ -59,6 +59,11 @@ export default function Admin() {
       body: JSON.stringify({ status }),
     })
     if (res.status === 401) return logout()
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      setError(data.error || 'Could not update booking.')
+      return
+    }
     load()
   }
 
@@ -126,6 +131,9 @@ export default function Admin() {
                   )}
                   {b.status !== 'cancelled' && (
                     <button className="slot" onClick={() => setStatus(b.id, 'cancelled')}>Cancel</button>
+                  )}
+                  {b.status === 'cancelled' && (
+                    <button className="slot" onClick={() => setStatus(b.id, 'pending')}>Restore</button>
                   )}
                 </td>
               </tr>

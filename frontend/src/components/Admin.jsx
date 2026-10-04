@@ -1,36 +1,140 @@
 import { useCallback, useEffect, useState } from 'react'
+import ContentManager from './ContentManager'
+import EmailSettings from './EmailSettings'
+
+function ColumnIcon({ name }) {
+  return (
+    <svg className="inquiry-column-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      {name === 'client' && (
+        <>
+          <circle cx="12" cy="8" r="3.25" />
+          <path d="M5.5 20a6.5 6.5 0 0 1 13 0" />
+        </>
+      )}
+      {name === 'service' && (
+        <>
+          <path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z" />
+          <path d="m19 15 .9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15Z" />
+        </>
+      )}
+      {name === 'vehicle' && (
+        <>
+          <path d="m5 11 1.5-4.5A2 2 0 0 1 8.4 5h7.2a2 2 0 0 1 1.9 1.5L19 11" />
+          <path d="M3.5 11h17v7h-17zM6.5 18v2m11-2v2M6 14h.01M18 14h.01" />
+        </>
+      )}
+      {name === 'date' && (
+        <>
+          <rect x="4" y="6" width="16" height="15" rx="2" />
+          <path d="M8 3v6m8-6v6M4 11h16" />
+        </>
+      )}
+      {name === 'status' && (
+        <>
+          <path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5" />
+          <path d="M12 7v5l3.5 2M16 3.5h4.5V8" />
+        </>
+      )}
+      {name === 'action' && (
+        <>
+          <path d="M2.5 12s3.4-6 9.5-6 9.5 6 9.5 6-3.4 6-9.5 6-9.5-6-9.5-6Z" />
+          <circle cx="12" cy="12" r="2.5" />
+        </>
+      )}
+    </svg>
+  )
+}
+
+function ContactIcon({ name }) {
+  return (
+    <svg className="inquiry-contact-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      {name === 'email' ? (
+        <>
+          <rect x="3" y="5" width="18" height="14" rx="2" />
+          <path d="m4 7 8 6 8-6" />
+        </>
+      ) : (
+        <path d="M7 3h3l2 5-2 2a15 15 0 0 0 4 4l2-2 5 2v3a2 2 0 0 1-2 2A16 16 0 0 1 5 5a2 2 0 0 1 2-2Z" />
+      )}
+    </svg>
+  )
+}
+
+function formatConversationBody(body) {
+  return body.replace(/\r\n?/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
+}
 
 export default function Admin() {
   const [token, setToken] = useState(() => sessionStorage.getItem('adminToken') || '')
   const [password, setPassword] = useState('')
   const [loginError, setLoginError] = useState('')
-  const [bookings, setBookings] = useState([])
-  const [filter, setFilter] = useState('all')
+  const [items, setItems] = useState([])
+  const [filter, setFilter] = useState('new')
+  const [page, setPage] = useState('inquiries')
   const [error, setError] = useState('')
+  const [selectedId, setSelectedId] = useState(null)
+  const [conversation, setConversation] = useState([])
+  const [conversationLoading, setConversationLoading] = useState(false)
+  const [conversationError, setConversationError] = useState('')
+  const [conversationRefresh, setConversationRefresh] = useState(0)
+  const [deleteRequest, setDeleteRequest] = useState(null)
+  const [deletePassword, setDeletePassword] = useState('')
+  const [deletePasswordError, setDeletePasswordError] = useState('')
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false)
 
   const logout = useCallback(() => {
     sessionStorage.removeItem('adminToken')
     setToken('')
-    setBookings([])
+    setItems([])
   }, [])
 
   const load = useCallback(async () => {
     setError('')
     try {
-      const res = await fetch('/api/admin/bookings', {
+      const res = await fetch('/api/admin/inquiries', {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (res.status === 401) return logout()
       if (!res.ok) throw new Error()
-      setBookings(await res.json())
+      setItems(await res.json())
     } catch {
-      setError('Could not load bookings.')
+      setError('Impossible de charger les demandes.')
     }
   }, [token, logout])
 
   useEffect(() => {
     if (token) load()
   }, [token, load])
+
+  const selected = items.find((item) => item.id === selectedId)
+
+  const shown = filter === 'archived'
+    ? items.filter((item) => item.archived)
+    : items.filter((item) => !item.archived && (filter === 'all' || item.status === filter))
+
+  useEffect(() => {
+    if (!selectedId) return undefined
+    let cancelled = false
+    setConversation([])
+    setConversationError('')
+    setConversationLoading(true)
+    fetch(`/api/admin/inquiries/${selectedId}/conversation`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }).then(async (res) => {
+      if (res.status === 401) {
+        logout()
+        return
+      }
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Impossible de charger la conversation Gmail.')
+      if (!cancelled) setConversation(data)
+    }).catch((err) => {
+      if (!cancelled) setConversationError(err.message || 'Impossible de joindre Gmail.')
+    }).finally(() => {
+      if (!cancelled) setConversationLoading(false)
+    })
+    return () => { cancelled = true }
+  }, [selectedId, conversationRefresh, token, logout])
 
   async function handleLogin(e) {
     e.preventDefault()
@@ -42,104 +146,402 @@ export default function Admin() {
         body: JSON.stringify({ password }),
       })
       const data = await res.json()
-      if (!res.ok) return setLoginError(data.error || 'Login failed.')
+      if (!res.ok) return setLoginError(data.error || 'Échec de la connexion.')
       sessionStorage.setItem('adminToken', data.token)
       setToken(data.token)
       setPassword('')
     } catch {
-      setLoginError('Could not reach the server.')
+      setLoginError('Impossible de joindre le serveur.')
     }
   }
 
-  async function setStatus(id, status) {
-    if (status === 'cancelled' && !window.confirm('Cancel this booking?')) return
-    const res = await fetch(`/api/admin/bookings/${id}/status`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ status }),
-    })
-    if (res.status === 401) return logout()
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}))
-      setError(data.error || 'Could not update booking.')
+  async function updateInquiry(id, changes) {
+    setError('')
+    try {
+      const res = await fetch(`/api/admin/inquiries/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(changes),
+      })
+      if (res.status === 401) return logout()
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error || 'Impossible de mettre à jour la demande.')
+        return
+      }
+      setItems((current) => current.map((item) => item.id === id ? { ...item, ...data } : item))
+    } catch {
+      setError('Impossible de joindre le serveur.')
+    }
+  }
+
+  function formatDateOnly(value) {
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return '–'
+    return new Intl.DateTimeFormat('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    }).format(date)
+  }
+
+  function formatDateTime(value) {
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return '–'
+    return new Intl.DateTimeFormat('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(date)
+  }
+
+  function gmailComposeUrl(inquiry) {
+    const service = inquiry.service_name || 'votre demande'
+    const subject = `Re: Demande de rendez-vous – ${service} [PP-${inquiry.id}]`
+    const body = [
+      `Bonjour ${inquiry.customer_name},`,
+      '',
+      `Merci pour votre demande concernant ${service}.`,
+      'Nous revenons vers vous rapidement afin d’échanger sur vos besoins et de confirmer les détails du rendez-vous.',
+      '',
+      'N’hésitez pas à nous préciser vos disponibilités ou toute information utile.',
+      '',
+      'Bien cordialement,',
+      'L’équipe Polish Pro',
+    ].join('\n')
+    const params = new URLSearchParams({ view: 'cm', fs: '1', to: inquiry.customer_email, su: subject, body })
+    return `https://mail.google.com/mail/?${params.toString()}`
+  }
+
+  async function confirmDeleteInquiry() {
+    if (!deleteRequest) return
+    const password = deletePassword.trim()
+    if (!password) {
+      setDeletePasswordError('Entrez votre mot de passe admin pour confirmer la suppression.')
       return
     }
-    load()
+
+    setDeleteSubmitting(true)
+    setDeletePasswordError('')
+    setError('')
+
+    try {
+      const verifyRes = await fetch('/api/admin/verify-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ password }),
+      })
+      if (verifyRes.status === 401) {
+        setDeletePasswordError('Mot de passe incorrect.')
+        return
+      }
+      if (!verifyRes.ok) {
+        const verifyData = await verifyRes.json().catch(() => ({}))
+        setDeletePasswordError(verifyData.error || 'Vérification du mot de passe impossible.')
+        return
+      }
+
+      const res = await fetch(`/api/admin/inquiries/${deleteRequest.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.status === 401) return logout()
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setDeletePasswordError(data.error || 'Impossible de supprimer la demande.')
+        return
+      }
+
+      setItems((current) => current.filter((item) => item.id !== deleteRequest.id))
+      setSelectedId(null)
+      setDeleteRequest(null)
+      setDeletePassword('')
+    } catch {
+      setDeletePasswordError('Impossible de joindre le serveur.')
+    } finally {
+      setDeleteSubmitting(false)
+    }
   }
 
   if (!token) {
     return (
       <main className="admin">
-        <h1>Admin login</h1>
+        <h1>Connexion administrateur</h1>
         <form className="form" onSubmit={handleLogin}>
           <label>
-            Password
+            Mot de passe
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
           </label>
-          <button className="btn" type="submit">Log in</button>
+          <button className="btn" type="submit">Se connecter</button>
           {loginError && <p className="error">{loginError}</p>}
         </form>
-        <p><a href="#/">← Back to the site</a></p>
+        <p><a href="#/">← Retour au site</a></p>
       </main>
     )
   }
 
-  const shown = filter === 'all' ? bookings : bookings.filter((b) => b.status === filter)
-
   return (
-    <main className="admin">
+    <main className="admin admin-dashboard">
       <div className="admin-head">
-        <h1>Bookings</h1>
+        <h1>Administration</h1>
         <div>
-          <a href="#/" style={{ marginRight: '1rem' }}>View site</a>
-          <button className="btn" onClick={logout}>Log out</button>
+          <a href="#/" style={{ marginRight: '1rem' }}>Voir le site</a>
+          <button className="btn" onClick={logout}>Se déconnecter</button>
         </div>
       </div>
 
-      <div className="slots">
-        {['all', 'pending', 'confirmed', 'cancelled'].map((f) => (
-          <button key={f} className={`slot ${filter === f ? 'active' : ''}`} onClick={() => setFilter(f)}>
-            {f}
+      <div className="admin-workspace">
+        <nav className="admin-pages" aria-label="Sections d’administration">
+          <button
+            className={`slot ${page === 'inquiries' ? 'active' : ''}`}
+            type="button"
+            aria-current={page === 'inquiries' ? 'page' : undefined}
+            onClick={() => setPage('inquiries')}
+          >
+            Demandes
           </button>
-        ))}
-      </div>
+          <button
+            className={`slot ${page === 'content' ? 'active' : ''}`}
+            type="button"
+            aria-current={page === 'content' ? 'page' : undefined}
+            onClick={() => setPage('content')}
+          >
+            Contenu du site
+          </button>
+          <button
+            className={`slot ${page === 'email' ? 'active' : ''}`}
+            type="button"
+            aria-current={page === 'email' ? 'page' : undefined}
+            onClick={() => setPage('email')}
+          >
+            E-mail
+          </button>
+        </nav>
 
-      {error && <p className="error">{error}</p>}
-      {shown.length === 0 && <p className="meta">No bookings.</p>}
+        <div className="admin-workspace-content">
+      {page === 'content' && <ContentManager token={token} logout={logout} onServicesChanged={load} />}
+      {page === 'email' && <EmailSettings token={token} logout={logout} />}
 
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>When</th><th>Service</th><th>Customer</th><th>Car</th><th>Status</th><th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {shown.map((b) => (
-              <tr key={b.id}>
-                <td>{new Date(b.slot_start).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</td>
-                <td>{b.service_name}<br /><span className="meta">{b.price_eur} €</span></td>
-                <td>
-                  {b.customer_name}<br />
-                  <span className="meta">{b.customer_email}{b.customer_phone ? ` · ${b.customer_phone}` : ''}</span>
-                </td>
-                <td>{b.car_model || '–'}</td>
-                <td><span className={`badge ${b.status}`}>{b.status}</span></td>
-                <td className="actions">
-                  {b.status === 'pending' && (
-                    <button className="slot" onClick={() => setStatus(b.id, 'confirmed')}>Confirm</button>
-                  )}
-                  {b.status !== 'cancelled' && (
-                    <button className="slot" onClick={() => setStatus(b.id, 'cancelled')}>Cancel</button>
-                  )}
-                  {b.status === 'cancelled' && (
-                    <button className="slot" onClick={() => setStatus(b.id, 'pending')}>Restore</button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {page === 'inquiries' && (
+        <>
+          {error && <p className="error">{error}</p>}
+          {selected ? (
+            <section className="inquiry-detail">
+              <button className="slot inquiry-back" type="button" onClick={() => setSelectedId(null)}>
+                ← Retour aux demandes
+              </button>
+              <div className="inquiry-detail-heading">
+                <div className="inquiry-customer">
+                  <p className="inquiry-detail-eyebrow">Demande client</p>
+                  <h2>{selected.customer_name}</h2>
+                  <div className="inquiry-contact">
+                    <a href={`mailto:${selected.customer_email}`}>
+                      <ContactIcon name="email" />
+                      <span>{selected.customer_email}</span>
+                    </a>
+                    {selected.customer_phone && (
+                      <a href={`tel:${selected.customer_phone}`}>
+                        <ContactIcon name="phone" />
+                        <span>{selected.customer_phone}</span>
+                      </a>
+                    )}
+                  </div>
+                </div>
+                <span className={`badge ${selected.archived ? 'archived' : selected.status}`}>
+                  {selected.archived ? '⚪ Archivée' : selected.status === 'handled' ? '🟢 Traitée' : '🔵 Nouvelle'}
+                </span>
+              </div>
+
+              <div className="inquiry-facts">
+                <div>
+                  <span>
+                    Service{selected.service_price_eur != null && ` - ${selected.service_price_eur} €`}
+                  </span>
+                  <strong>{selected.service_name || '–'}</strong>
+                </div>
+                <div><span>Véhicule</span><strong>{selected.car_model || '–'}</strong></div>
+                <div><span>Reçue le</span><strong>{formatDateTime(selected.created_at)}</strong></div>
+              </div>
+
+              <section className="inquiry-conversation">
+                <div className="inquiry-section-heading">
+                  <h3>Conversation</h3>
+                  <button
+                    className="slot"
+                    type="button"
+                    onClick={() => setConversationRefresh((current) => current + 1)}
+                  >
+                    Actualiser
+                  </button>
+                </div>
+                {!selected.email_sent && <p className="error">La notification à l’administrateur n’a pas été envoyée.</p>}
+                {selected.customer_email_sent === false && <p className="error">L’e-mail de confirmation au client n’a pas été envoyé.</p>}
+                <article className="conversation-message customer">
+                  <strong>{selected.customer_name} · Demande envoyée depuis le site</strong>
+                  <time>{new Date(selected.created_at).toLocaleString()}</time>
+                  <p>{selected.message}</p>
+                </article>
+                {conversationLoading && <p className="meta">Chargement de la conversation Gmail…</p>}
+                {conversationError && <p className="error">{conversationError}</p>}
+                {!conversationLoading && !conversationError && conversation.map((message) => (
+                  <article className={`conversation-message ${message.direction}`} key={message.id}>
+                    <div className="conversation-message-heading">
+                      <strong>{message.direction === 'admin' ? 'Vous' : selected.customer_name}</strong>
+                      <time>{new Date(message.date).toLocaleString()}</time>
+                    </div>
+                    <p>{formatConversationBody(message.body)}</p>
+                  </article>
+                ))}
+                {!conversationLoading && !conversationError && conversation.length === 0 && (
+                  <p className="meta">Aucune réponse Gmail trouvée pour cette demande pour le moment.</p>
+                )}
+              </section>
+
+              <div className="inquiry-detail-actions">
+                <a className="btn inquiry-reply-action" href={gmailComposeUrl(selected)} target="_blank" rel="noreferrer">
+                  <ContactIcon name="email" /> Répondre par e-mail
+                </a>
+                <button
+                  className="slot"
+                  type="button"
+                  onClick={() => updateInquiry(selected.id, { status: selected.status === 'handled' ? 'new' : 'handled' })}
+                >
+                  {selected.status === 'handled' ? 'Rouvrir la demande' : 'Marquer comme traitée'}
+                </button>
+                <button
+                  className="slot"
+                  type="button"
+                  onClick={() => updateInquiry(selected.id, { archived: !selected.archived })}
+                >
+                  {selected.archived ? 'Restaurer des archives' : 'Archiver'}
+                </button>
+                <button className="slot danger" type="button" onClick={() => {
+                  setDeleteRequest(selected)
+                  setDeletePassword('')
+                  setDeletePasswordError('')
+                }}>
+                  Supprimer
+                </button>
+              </div>
+            </section>
+          ) : (
+            <>
+              <div className="slots">
+                {['new', 'handled', 'archived'].map((f) => (
+                  <button key={f} className={`slot ${filter === f ? 'active' : ''}`} onClick={() => setFilter(f)}>
+                    {f === 'new' ? 'Nouvelles' : f === 'handled' ? 'Traitées' : 'Archivées'}
+                  </button>
+                ))}
+              </div>
+              {shown.length === 0 && <p className="meta">Aucune demande.</p>}
+              <div className="table-wrap">
+                <table className="inquiry-table">
+                  <thead>
+                    <tr>
+                      <th><ColumnIcon name="client" /> Client</th>
+                      <th><ColumnIcon name="service" /> Service</th>
+                      <th><ColumnIcon name="vehicle" /> Véhicule</th>
+                      <th><ColumnIcon name="date" /> Reçue le</th>
+                      <th><ColumnIcon name="status" /> Statut</th>
+                      <th><ColumnIcon name="action" /> Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shown.map((inquiry) => (
+                      <tr key={inquiry.id}>
+                        <td>{inquiry.customer_name}</td>
+                        <td>{inquiry.service_name || '–'}</td>
+                        <td>{inquiry.car_model || '–'}</td>
+                        <td>{formatDateOnly(inquiry.created_at)}</td>
+                        <td>
+                          <span className={`badge ${inquiry.archived ? 'archived' : inquiry.status}`}>
+                            {inquiry.archived ? '⚪ Archivée' : inquiry.status === 'handled' ? '🟢 Traitée' : '🔵 Nouvelle'}
+                          </span>
+                        </td>
+                        <td>
+                          <button className="slot" type="button" onClick={() => setSelectedId(inquiry.id)}>
+                            <ColumnIcon name="action" /> Voir
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </>
+      )}
+
+      {deleteRequest && (
+        <div
+          className="booking-confirmation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setDeleteRequest(null)
+              setDeletePassword('')
+              setDeletePasswordError('')
+            }
+          }}
+        >
+          <section
+            className="booking-confirmation-panel neutral"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-confirmation-title"
+          >
+            <span className="booking-confirmation-mark" aria-hidden="true">!</span>
+            <p className="hero-eyebrow">Suppression définitive</p>
+            <h2 id="delete-confirmation-title">Confirmer la suppression</h2>
+            <p>
+              Êtes-vous sûr de vouloir supprimer la demande de <strong>{deleteRequest.customer_name}</strong> ?
+              Cette action est irréversible.
+            </p>
+
+            <label>
+              Mot de passe administrateur
+              <input
+                type="password"
+                value={deletePassword}
+                onChange={(event) => {
+                  setDeletePassword(event.target.value)
+                  setDeletePasswordError('')
+                }}
+                placeholder="Saisissez votre mot de passe"
+                autoFocus
+              />
+            </label>
+
+            {deletePasswordError && <p className="error">{deletePasswordError}</p>}
+
+            <div className="inquiry-detail-actions">
+              <button
+                type="button"
+                className="slot"
+                onClick={() => {
+                  setDeleteRequest(null)
+                  setDeletePassword('')
+                  setDeletePasswordError('')
+                }}
+                disabled={deleteSubmitting}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                className="btn"
+                onClick={confirmDeleteInquiry}
+                disabled={deleteSubmitting}
+              >
+                {deleteSubmitting ? 'Suppression…' : 'Supprimer définitivement'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+        </div>
       </div>
     </main>
   )

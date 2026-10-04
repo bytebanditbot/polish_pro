@@ -1,32 +1,28 @@
-import { useEffect, useState } from 'react'
-
-const today = () => new Date().toLocaleDateString('en-CA') // YYYY-MM-DD
+import { useEffect, useRef, useState } from 'react'
 
 export default function BookingForm({ services, selectedId, onSelectService }) {
-  const [date, setDate] = useState('')
-  const [slots, setSlots] = useState([])
-  const [slot, setSlot] = useState('')
-  const [loadingSlots, setLoadingSlots] = useState(false)
-  const [refresh, setRefresh] = useState(0)
   const [fields, setFields] = useState({ name: '', email: '', phone: '', car: '' })
   const [status, setStatus] = useState(null) // { type: 'success' | 'error', text }
   const [submitting, setSubmitting] = useState(false)
+  const [confirmationOpen, setConfirmationOpen] = useState(false)
+  const [confirmationEmailSent, setConfirmationEmailSent] = useState(false)
+  const closeConfirmationRef = useRef(null)
 
   useEffect(() => {
-    setSlot('')
-    setSlots([])
-    if (!selectedId || !date) return
-    let cancelled = false
-    setLoadingSlots(true)
-    fetch(`/api/slots?service_id=${selectedId}&date=${date}`)
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data) => !cancelled && setSlots(data))
-      .catch(() => !cancelled && setSlots([]))
-      .finally(() => !cancelled && setLoadingSlots(false))
-    return () => {
-      cancelled = true
+    if (!confirmationOpen) return undefined
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setConfirmationOpen(false)
+      if (event.key === 'Tab') {
+        event.preventDefault()
+        closeConfirmationRef.current?.focus()
+      }
     }
-  }, [selectedId, date, refresh])
+
+    closeConfirmationRef.current?.focus()
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [confirmationOpen])
 
   const setField = (key) => (e) => setFields({ ...fields, [key]: e.target.value })
 
@@ -35,101 +31,106 @@ export default function BookingForm({ services, selectedId, onSelectService }) {
     setStatus(null)
     setSubmitting(true)
     try {
-      const res = await fetch('/api/bookings', {
+      const selectedService = services.find((service) => String(service.id) === String(selectedId))
+      const res = await fetch('/api/inquiries', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          service_id: Number(selectedId),
+          service_id: selectedId ? Number(selectedId) : null,
           customer_name: fields.name,
           customer_email: fields.email,
           customer_phone: fields.phone,
           car_model: fields.car,
-          slot_start: slot,
+          message: `Demande de rendez-vous${selectedService ? ` pour le service « ${selectedService.name} »` : ''}.`,
         }),
       })
       const data = await res.json()
       if (res.status === 201) {
-        setStatus({
-          type: 'success',
-          text: `Thank you, ${data.customer_name}! Your booking #${data.id} for ${slot} is received.`,
-        })
+        setConfirmationEmailSent(data.customer_email_sent === true)
+        setConfirmationOpen(true)
         setFields({ name: '', email: '', phone: '', car: '' })
-        setSlot('')
-        setRefresh((n) => n + 1)
       } else {
-        setStatus({ type: 'error', text: data.error || 'Booking failed.' })
-        if (res.status === 409) setRefresh((n) => n + 1)
+        setStatus({ type: 'error', text: data.error || 'Impossible d’envoyer votre demande. Réessayez.' })
       }
     } catch {
-      setStatus({ type: 'error', text: 'Could not reach the server. Please try again.' })
+      setStatus({ type: 'error', text: 'Impossible de joindre le serveur. Vérifiez votre connexion et réessayez.' })
     } finally {
       setSubmitting(false)
     }
   }
 
   return (
-    <form className="form" onSubmit={handleSubmit}>
-      <label>
-        Service
-        <select value={selectedId} onChange={(e) => onSelectService(e.target.value)} required>
-          <option value="">Choose a service…</option>
-          {services.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name} – {s.price_eur} €
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label>
-        Date
-        <input type="date" value={date} min={today()} onChange={(e) => setDate(e.target.value)} required />
-      </label>
-
-      {selectedId && date && (
-        <div>
-          <span className="label">Available times</span>
-          {loadingSlots && <p className="meta">Loading…</p>}
-          {!loadingSlots && slots.length === 0 && (
-            <p className="meta">No free times on this day. Please pick another date.</p>
-          )}
-          <div className="slots">
-            {slots.map((s) => (
-              <button
-                type="button"
-                key={s}
-                className={`slot ${slot === s ? 'active' : ''}`}
-                onClick={() => setSlot(s)}
-              >
-                {s.slice(11)}
-              </button>
+    <>
+      <form className="form" onSubmit={handleSubmit}>
+        <label>
+          Service
+          <select value={selectedId} onChange={(e) => onSelectService(e.target.value)} required>
+            <option value="">Choisir un service…</option>
+            {services.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name} – {s.price_eur} €
+              </option>
             ))}
-          </div>
+          </select>
+        </label>
+
+        <label>
+          Votre nom
+          <input value={fields.name} onChange={setField('name')} required minLength={2} />
+        </label>
+        <label>
+          E-mail
+          <input type="email" value={fields.email} onChange={setField('email')} required />
+        </label>
+        <label>
+          Téléphone (facultatif)
+          <input value={fields.phone} onChange={setField('phone')} />
+        </label>
+        <label>
+          Modèle de voiture (facultatif)
+          <input value={fields.car} onChange={setField('car')} placeholder="ex. VW Golf VII" />
+        </label>
+
+        <button className="btn" type="submit" disabled={submitting}>
+          {submitting ? 'Envoi en cours…' : 'Envoyer ma demande de rendez-vous'}
+        </button>
+
+        {status && <p className="error">{status.text}</p>}
+      </form>
+
+      {confirmationOpen && (
+        <div
+          className="booking-confirmation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setConfirmationOpen(false)
+          }}
+        >
+          <section
+            className="booking-confirmation-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="booking-confirmation-title"
+            aria-describedby="booking-confirmation-message"
+          >
+            <span className="booking-confirmation-mark" aria-hidden="true">✓</span>
+            <p className="hero-eyebrow">Demande envoyée</p>
+            <h2 id="booking-confirmation-title">Demande enregistrée</h2>
+            <p id="booking-confirmation-message">
+              {confirmationEmailSent
+                ? 'Votre demande a bien été envoyée et un e-mail de confirmation vous a été adressé. Notre équipe vous contactera prochainement pour échanger avec vous et confirmer les détails de votre rendez-vous.'
+                : 'Votre demande a bien été enregistrée, mais l’e-mail de confirmation n’a pas pu être envoyé. Notre équipe vous contactera prochainement pour échanger avec vous et confirmer les détails de votre rendez-vous.'}
+            </p>
+            <button
+              ref={closeConfirmationRef}
+              className="btn"
+              type="button"
+              onClick={() => setConfirmationOpen(false)}
+            >
+              Compris
+            </button>
+          </section>
         </div>
       )}
-
-      <label>
-        Your name
-        <input value={fields.name} onChange={setField('name')} required minLength={2} />
-      </label>
-      <label>
-        Email
-        <input type="email" value={fields.email} onChange={setField('email')} required />
-      </label>
-      <label>
-        Phone (optional)
-        <input value={fields.phone} onChange={setField('phone')} />
-      </label>
-      <label>
-        Car model (optional)
-        <input value={fields.car} onChange={setField('car')} placeholder="e.g. BMW 320d" />
-      </label>
-
-      <button className="btn" type="submit" disabled={!slot || submitting}>
-        {submitting ? 'Booking…' : 'Confirm booking'}
-      </button>
-
-      {status && <p className={status.type === 'success' ? 'success' : 'error'}>{status.text}</p>}
-    </form>
+    </>
   )
 }

@@ -8,7 +8,7 @@ export default function Services({ services, onBook }) {
           <p className="meta">
             <strong>{s.price_eur} €</strong> · {Math.round((s.duration_min / 60) * 10) / 10} h
           </p>
-          <button className="btn" onClick={() => onBook(s.id)}>Book this</button>
+          <button className="btn" onClick={() => onBook(s.id)}>Demander un devis</button>
         </article>
       ))}
     </div>

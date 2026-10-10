@@ -82,8 +82,8 @@ export default function Admin() {
   const [deletePassword, setDeletePassword] = useState('')
   const [deletePasswordError, setDeletePasswordError] = useState('')
   const [deleteSubmitting, setDeleteSubmitting] = useState(false)
-  const [includeConversation, setIncludeConversation] = useState(false)
-  const [certificateOpen, setCertificateOpen] = useState(false)
+  // Print pop-ups: null | 'sheet' | 'certificate-ask' | 'certificate-form'
+  const [printDialog, setPrintDialog] = useState(null)
   const [certificate, setCertificate] = useState({ date: '', hours: '', price: '' })
   const [certificateError, setCertificateError] = useState('')
 
@@ -114,34 +114,37 @@ export default function Admin() {
   const selected = items.find((item) => item.id === selectedId)
 
   useEffect(() => {
-    setCertificateOpen(false)
+    setPrintDialog(null)
     setCertificateError('')
   }, [selectedId])
 
-  function toggleCertificate() {
-    if (!certificateOpen && selected) {
-      setCertificate({
-        date: new Date().toLocaleDateString('sv-SE'),
-        hours: selected.service_duration_min
-          ? String(Math.round((selected.service_duration_min / 60) * 100) / 100)
-          : '',
-        price: selected.service_price_eur != null ? String(selected.service_price_eur) : '',
-      })
-      setCertificateError('')
+  useEffect(() => {
+    if (!printDialog) return undefined
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setPrintDialog(null)
     }
-    setCertificateOpen((open) => !open)
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [printDialog])
+
+  function certificateDefaults(inquiry) {
+    return {
+      date: new Date().toLocaleDateString('sv-SE'),
+      hours: inquiry.service_duration_min
+        ? String(Math.round((inquiry.service_duration_min / 60) * 100) / 100)
+        : '',
+      price: inquiry.service_price_eur != null ? String(inquiry.service_price_eur) : '',
+    }
   }
 
-  async function handlePrintCertificate(event) {
-    event.preventDefault()
-    const hours = Number(certificate.hours)
-    const price = Number(certificate.price)
-    if (!certificate.date || !(hours > 0) || certificate.price === '' || !(price >= 0)) {
-      setCertificateError('Indiquez une date, un temps passé supérieur à 0 et un prix valide.')
-      return
-    }
-    setCertificateError('')
+  function validateCertificate(values) {
+    const hours = Number(values.hours)
+    const price = Number(values.price)
+    if (!values.date || !(hours > 0) || values.price === '' || !(price >= 0)) return null
+    return { date: values.date, minutes: Math.round(hours * 60), price }
+  }
 
+  async function printCertificateWith(details) {
     let business = null
     try {
       const res = await fetch('/api/content')
@@ -152,7 +155,43 @@ export default function Admin() {
     } catch {
       // The certificate still prints without the business details.
     }
-    printCertificate(selected, { date: certificate.date, minutes: Math.round(hours * 60), price }, business)
+    printCertificate(selected, details, business)
+  }
+
+  function startCertificate() {
+    const defaults = certificateDefaults(selected)
+    setCertificate(defaults)
+    setCertificateError('')
+    // Without a usable service duration or price there is nothing to print
+    // as-is, so go straight to the form.
+    setPrintDialog(validateCertificate(defaults) ? 'certificate-ask' : 'certificate-form')
+  }
+
+  function printSheet(withConversation) {
+    printClientSheet(selected, withConversation ? conversation : null)
+    setPrintDialog(null)
+  }
+
+  async function printCertificateAsIs() {
+    const details = validateCertificate(certificate)
+    if (!details) {
+      setPrintDialog('certificate-form')
+      return
+    }
+    setPrintDialog(null)
+    await printCertificateWith(details)
+  }
+
+  async function handlePrintCertificate(event) {
+    event.preventDefault()
+    const details = validateCertificate(certificate)
+    if (!details) {
+      setCertificateError('Indiquez une date, un temps passé supérieur à 0 et un prix valide.')
+      return
+    }
+    setCertificateError('')
+    setPrintDialog(null)
+    await printCertificateWith(details)
   }
 
   const shown = filter === 'archived'
@@ -378,9 +417,19 @@ export default function Admin() {
           {error && <p className="error">{error}</p>}
           {selected ? (
             <section className="inquiry-detail">
-              <button className="slot inquiry-back" type="button" onClick={() => setSelectedId(null)}>
-                ← Retour aux demandes
-              </button>
+              <div className="inquiry-topbar">
+                <button className="slot" type="button" onClick={() => setSelectedId(null)}>
+                  ← Retour aux demandes
+                </button>
+                <div className="inquiry-print-actions">
+                  <button className="slot" type="button" onClick={() => setPrintDialog('sheet')}>
+                    Imprimer la fiche client
+                  </button>
+                  <button className="slot" type="button" onClick={startCertificate}>
+                    Imprimer l’attestation de travaux
+                  </button>
+                </div>
+              </div>
               <div className="inquiry-detail-heading">
                 <div className="inquiry-customer">
                   <p className="inquiry-detail-eyebrow">Demande client</p>
@@ -475,78 +524,128 @@ export default function Admin() {
                 </button>
               </div>
 
-              <div className="inquiry-print-actions">
-                <label className="inquiry-print-option">
-                  <input
-                    type="checkbox"
-                    checked={includeConversation}
-                    onChange={(event) => setIncludeConversation(event.target.checked)}
-                  />
-                  Inclure la conversation e-mail
-                </label>
-                <button
-                  className="slot"
-                  type="button"
-                  disabled={includeConversation && conversationLoading}
-                  onClick={() => printClientSheet(selected, includeConversation ? conversation : null)}
+              {printDialog && (
+                <div
+                  className="booking-confirmation"
+                  onMouseDown={(event) => {
+                    if (event.target === event.currentTarget) setPrintDialog(null)
+                  }}
                 >
-                  Imprimer la fiche client
-                </button>
-                <button
-                  className="slot"
-                  type="button"
-                  aria-expanded={certificateOpen}
-                  onClick={toggleCertificate}
-                >
-                  Attestation de travaux
-                </button>
-              </div>
+                  {printDialog === 'sheet' && (
+                    <div
+                      className="booking-confirmation-panel neutral"
+                      role="dialog"
+                      aria-modal="true"
+                      aria-labelledby="print-dialog-title"
+                    >
+                      <span className="booking-confirmation-mark" aria-hidden="true">?</span>
+                      <p className="hero-eyebrow">Fiche client</p>
+                      <h2 id="print-dialog-title">Inclure la conversation e-mail ?</h2>
+                      <p>
+                        La fiche contient toujours les informations du client et son message. Voulez-vous
+                        aussi imprimer les échanges d’e-mails ?
+                      </p>
+                      {conversationLoading && <p className="meta">Chargement de la conversation Gmail…</p>}
+                      <div className="print-dialog-actions">
+                        <button className="slot" type="button" autoFocus onClick={() => printSheet(false)}>
+                          Non
+                        </button>
+                        <button
+                          className="btn"
+                          type="button"
+                          disabled={conversationLoading}
+                          onClick={() => printSheet(true)}
+                        >
+                          Oui
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
-              {certificateOpen && (
-                <form className="inquiry-certificate" onSubmit={handlePrintCertificate}>
-                  <h3>Attestation de travaux</h3>
-                  <p className="meta">
-                    Les valeurs sont préremplies à partir du service. Ajustez la date de fin, le temps
-                    réellement passé et le prix avant d’imprimer.
-                  </p>
-                  <div className="admin-editor-fields">
-                    <label className="admin-field">
-                      Date de fin des travaux
-                      <input
-                        type="date"
-                        value={certificate.date}
-                        onChange={(event) => setCertificate((current) => ({ ...current, date: event.target.value }))}
-                        required
-                      />
-                    </label>
-                    <label className="admin-field">
-                      Temps passé (heures)
-                      <input
-                        type="number"
-                        min="0.25"
-                        step="0.25"
-                        value={certificate.hours}
-                        onChange={(event) => setCertificate((current) => ({ ...current, hours: event.target.value }))}
-                        required
-                      />
-                    </label>
-                    <label className="admin-field">
-                      Prix (€)
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={certificate.price}
-                        onChange={(event) => setCertificate((current) => ({ ...current, price: event.target.value }))}
-                        required
-                      />
-                    </label>
-                  </div>
-                  {certificateError && <p className="error">{certificateError}</p>}
-                  <div className="actions">
-                    <button className="btn" type="submit">Imprimer l’attestation</button>
-                  </div>
-                </form>
+                  {printDialog === 'certificate-ask' && (
+                    <div
+                      className="booking-confirmation-panel neutral"
+                      role="dialog"
+                      aria-modal="true"
+                      aria-labelledby="print-dialog-title"
+                    >
+                      <span className="booking-confirmation-mark" aria-hidden="true">?</span>
+                      <p className="hero-eyebrow">Attestation de travaux</p>
+                      <h2 id="print-dialog-title">Voulez-vous faire des modifications ?</h2>
+                      <p>
+                        Date de fin : {certificate.date.split('-').reverse().join('/')} · temps passé :{' '}
+                        {certificate.hours} h · prix : {certificate.price} €. Ces valeurs viennent du
+                        service.
+                      </p>
+                      <div className="print-dialog-actions">
+                        <button className="slot" type="button" autoFocus onClick={printCertificateAsIs}>
+                          Non, imprimer
+                        </button>
+                        <button className="btn" type="button" onClick={() => setPrintDialog('certificate-form')}>
+                          Oui, modifier
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {printDialog === 'certificate-form' && (
+                    <form
+                      className="booking-confirmation-panel neutral print-dialog-form"
+                      role="dialog"
+                      aria-modal="true"
+                      aria-labelledby="print-dialog-title"
+                      onSubmit={handlePrintCertificate}
+                    >
+                      <p className="hero-eyebrow">Attestation de travaux</p>
+                      <h2 id="print-dialog-title">Attestation de travaux</h2>
+                      <p>
+                        Les valeurs sont préremplies à partir du service. Ajustez la date de fin, le temps
+                        réellement passé et le prix avant d’imprimer.
+                      </p>
+                      <div className="print-dialog-fields">
+                        <label className="admin-field">
+                          Date de fin des travaux
+                          <input
+                            type="date"
+                            value={certificate.date}
+                            onChange={(event) => setCertificate((current) => ({ ...current, date: event.target.value }))}
+                            required
+                            autoFocus
+                          />
+                        </label>
+                        <label className="admin-field">
+                          Temps passé (heures)
+                          <input
+                            type="number"
+                            min="0.25"
+                            step="0.25"
+                            value={certificate.hours}
+                            onChange={(event) => setCertificate((current) => ({ ...current, hours: event.target.value }))}
+                            required
+                          />
+                        </label>
+                        <label className="admin-field">
+                          Prix (€)
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={certificate.price}
+                            onChange={(event) => setCertificate((current) => ({ ...current, price: event.target.value }))}
+                            required
+                          />
+                        </label>
+                      </div>
+                      {certificateError && <p className="error">{certificateError}</p>}
+                      <div className="print-dialog-actions">
+                        <button className="slot" type="button" onClick={() => setPrintDialog(null)}>
+                          Annuler
+                        </button>
+                        <button className="btn" type="submit">Imprimer l’attestation</button>
+                      </div>
+                    </form>
+                  )}
+                </div>
               )}
             </section>
           ) : (

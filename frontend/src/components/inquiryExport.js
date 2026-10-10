@@ -1,4 +1,6 @@
-// PDF export and A4 printing for the admin inquiries table.
+// A4 printing of the admin inquiries table. The browser print dialog also
+// offers "Save as PDF", so this covers both printing and PDF export without
+// any extra dependency.
 
 const COLUMNS = ['Client', 'E-mail', 'Service', 'Véhicule', 'Reçue le', 'Statut']
 
@@ -18,17 +20,6 @@ function statusLabel(inquiry) {
   return inquiry.status === 'handled' ? 'Traitée' : 'Nouvelle'
 }
 
-function toRows(inquiries) {
-  return inquiries.map((inquiry) => [
-    inquiry.customer_name,
-    inquiry.customer_email,
-    inquiry.service_name || '–',
-    inquiry.car_model || '–',
-    formatDate(inquiry.created_at),
-    statusLabel(inquiry),
-  ])
-}
-
 function escapeHtml(value) {
   return String(value)
     .replace(/&/g, '&amp;')
@@ -38,56 +29,20 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;')
 }
 
-function fileStamp() {
-  return new Date().toISOString().slice(0, 10)
-}
-
-// Downloads a real PDF (A4 landscape). jsPDF is loaded on demand so it
-// does not weigh on the public site bundle.
-export async function exportInquiriesPdf(inquiries, title = 'Demandes clients') {
-  const [{ jsPDF }, { default: autoTable }] = await Promise.all([
-    import('jspdf'),
-    import('jspdf-autotable'),
-  ])
-
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-  const generated = new Intl.DateTimeFormat('fr-FR', {
-    dateStyle: 'long',
-    timeStyle: 'short',
-  }).format(new Date())
-
-  doc.setFontSize(16)
-  doc.text(`Polish Pro – ${title}`, 14, 16)
-  doc.setFontSize(9)
-  doc.setTextColor(110)
-  doc.text(`${inquiries.length} demande(s) · généré le ${generated}`, 14, 22)
-
-  autoTable(doc, {
-    head: [COLUMNS],
-    body: toRows(inquiries),
-    startY: 27,
-    margin: { left: 14, right: 14, bottom: 14 },
-    styles: { fontSize: 9, cellPadding: 2.2, overflow: 'linebreak' },
-    headStyles: { fillColor: [20, 28, 38], textColor: 255 },
-    alternateRowStyles: { fillColor: [245, 247, 250] },
-    didDrawPage: () => {
-      const { width, height } = doc.internal.pageSize
-      doc.setFontSize(8)
-      doc.setTextColor(130)
-      doc.text(`Page ${doc.getNumberOfPages()}`, width - 14, height - 7, { align: 'right' })
-    },
-  })
-
-  doc.save(`demandes-polish-pro-${fileStamp()}.pdf`)
-}
-
-// Prints the table on A4 through a hidden iframe (no popup blocker issues).
-export function printInquiries(inquiries, title = 'Demandes clients') {
-  const rows = toRows(inquiries)
+function buildHtml(inquiries, title) {
+  const rows = inquiries
+    .map((inquiry) => [
+      inquiry.customer_name,
+      inquiry.customer_email,
+      inquiry.service_name || '–',
+      inquiry.car_model || '–',
+      formatDate(inquiry.created_at),
+      statusLabel(inquiry),
+    ])
     .map((cells) => `<tr>${cells.map((cell) => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`)
     .join('')
 
-  const html = `<!doctype html>
+  return `<!doctype html>
 <html lang="fr">
 <head>
 <meta charset="utf-8">
@@ -108,25 +63,28 @@ export function printInquiries(inquiries, title = 'Demandes clients') {
 </head>
 <body>
   <h1>Polish Pro – ${escapeHtml(title)}</h1>
-  <p>${inquiries.length} demande(s) · imprimé le ${escapeHtml(new Date().toLocaleString('fr-FR'))}</p>
+  <p>${inquiries.length} demande(s) · ${escapeHtml(new Date().toLocaleString('fr-FR'))}</p>
   <table>
     <thead><tr>${COLUMNS.map((column) => `<th>${column}</th>`).join('')}</tr></thead>
     <tbody>${rows}</tbody>
   </table>
 </body>
 </html>`
+}
 
+// Opens the print dialog (A4 landscape) through a hidden iframe, so no popup
+// blocker is involved. Choose "Save as PDF" as destination to get a PDF file.
+export function printInquiries(inquiries, title = 'Demandes clients') {
   const frame = document.createElement('iframe')
   frame.setAttribute('aria-hidden', 'true')
   frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;'
   document.body.appendChild(frame)
 
-  const cleanup = () => setTimeout(() => frame.remove(), 1000)
   frame.onload = () => {
     const win = frame.contentWindow
-    win.onafterprint = cleanup
+    win.onafterprint = () => frame.remove()
     win.focus()
     win.print()
   }
-  frame.srcdoc = html
+  frame.srcdoc = buildHtml(inquiries, title)
 }

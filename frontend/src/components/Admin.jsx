@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import ContentManager from './ContentManager'
 import EmailSettings from './EmailSettings'
+import { printInquiries } from './inquiryExport'
 
 function ColumnIcon({ name }) {
   return (
@@ -174,6 +175,8 @@ export default function Admin() {
       setError('Impossible de joindre le serveur.')
     }
   }
+
+  const listTitle = `Demandes ${filter === 'new' ? 'nouvelles' : filter === 'handled' ? 'traitées' : 'archivées'}`
 
   function formatDateOnly(value) {
     const date = new Date(value)
@@ -434,6 +437,17 @@ export default function Admin() {
                     {f === 'new' ? 'Nouvelles' : f === 'handled' ? 'Traitées' : 'Archivées'}
                   </button>
                 ))}
+                <span className="inquiry-export-actions">
+                  <button
+                    className="slot"
+                    type="button"
+                    disabled={shown.length === 0}
+                    title="Choisissez « Enregistrer au format PDF » dans la fenêtre d’impression pour obtenir un PDF"
+                    onClick={() => printInquiries(shown, listTitle)}
+                  >
+                    Imprimer / PDF (A4)
+                  </button>
+                </span>
               </div>
               {shown.length === 0 && <p className="meta">Aucune demande.</p>}
               <div className="table-wrap">

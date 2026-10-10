@@ -203,7 +203,8 @@ module.exports = function adminRouter(pool) {
       const { rows } = await pool.query(
         `SELECT i.id, i.customer_name, i.customer_email, i.customer_phone, i.car_model,
                 i.message, i.status, i.archived, i.email_sent, i.customer_email_sent, i.created_at,
-                s.name AS service_name, s.price_eur AS service_price_eur
+                s.name AS service_name, s.price_eur AS service_price_eur,
+                s.duration_min AS service_duration_min
            FROM inquiries i
            LEFT JOIN services s ON s.id = i.service_id
           ORDER BY i.created_at DESC`

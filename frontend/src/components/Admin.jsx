@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import ContentManager from './ContentManager'
 import EmailSettings from './EmailSettings'
-import { printInquiries } from './inquiryExport'
+import { printCertificate, printClientSheet, printInquiries } from './inquiryExport'
 
 function ColumnIcon({ name }) {
   return (
@@ -82,6 +82,10 @@ export default function Admin() {
   const [deletePassword, setDeletePassword] = useState('')
   const [deletePasswordError, setDeletePasswordError] = useState('')
   const [deleteSubmitting, setDeleteSubmitting] = useState(false)
+  const [includeConversation, setIncludeConversation] = useState(false)
+  const [certificateOpen, setCertificateOpen] = useState(false)
+  const [certificate, setCertificate] = useState({ date: '', hours: '', price: '' })
+  const [certificateError, setCertificateError] = useState('')
 
   const logout = useCallback(() => {
     sessionStorage.removeItem('adminToken')
@@ -108,6 +112,48 @@ export default function Admin() {
   }, [token, load])
 
   const selected = items.find((item) => item.id === selectedId)
+
+  useEffect(() => {
+    setCertificateOpen(false)
+    setCertificateError('')
+  }, [selectedId])
+
+  function toggleCertificate() {
+    if (!certificateOpen && selected) {
+      setCertificate({
+        date: new Date().toLocaleDateString('sv-SE'),
+        hours: selected.service_duration_min
+          ? String(Math.round((selected.service_duration_min / 60) * 100) / 100)
+          : '',
+        price: selected.service_price_eur != null ? String(selected.service_price_eur) : '',
+      })
+      setCertificateError('')
+    }
+    setCertificateOpen((open) => !open)
+  }
+
+  async function handlePrintCertificate(event) {
+    event.preventDefault()
+    const hours = Number(certificate.hours)
+    const price = Number(certificate.price)
+    if (!certificate.date || !(hours > 0) || certificate.price === '' || !(price >= 0)) {
+      setCertificateError('Indiquez une date, un temps passé supérieur à 0 et un prix valide.')
+      return
+    }
+    setCertificateError('')
+
+    let business = null
+    try {
+      const res = await fetch('/api/content')
+      if (res.ok) {
+        const { contact } = await res.json()
+        business = { address: contact?.address, phone: contact?.phone }
+      }
+    } catch {
+      // The certificate still prints without the business details.
+    }
+    printCertificate(selected, { date: certificate.date, minutes: Math.round(hours * 60), price }, business)
+  }
 
   const shown = filter === 'archived'
     ? items.filter((item) => item.archived)
@@ -428,6 +474,80 @@ export default function Admin() {
                   Supprimer
                 </button>
               </div>
+
+              <div className="inquiry-print-actions">
+                <label className="inquiry-print-option">
+                  <input
+                    type="checkbox"
+                    checked={includeConversation}
+                    onChange={(event) => setIncludeConversation(event.target.checked)}
+                  />
+                  Inclure la conversation e-mail
+                </label>
+                <button
+                  className="slot"
+                  type="button"
+                  disabled={includeConversation && conversationLoading}
+                  onClick={() => printClientSheet(selected, includeConversation ? conversation : null)}
+                >
+                  Imprimer la fiche client
+                </button>
+                <button
+                  className="slot"
+                  type="button"
+                  aria-expanded={certificateOpen}
+                  onClick={toggleCertificate}
+                >
+                  Attestation de travaux
+                </button>
+              </div>
+
+              {certificateOpen && (
+                <form className="inquiry-certificate" onSubmit={handlePrintCertificate}>
+                  <h3>Attestation de travaux</h3>
+                  <p className="meta">
+                    Les valeurs sont préremplies à partir du service. Ajustez la date de fin, le temps
+                    réellement passé et le prix avant d’imprimer.
+                  </p>
+                  <div className="admin-editor-fields">
+                    <label className="admin-field">
+                      Date de fin des travaux
+                      <input
+                        type="date"
+                        value={certificate.date}
+                        onChange={(event) => setCertificate((current) => ({ ...current, date: event.target.value }))}
+                        required
+                      />
+                    </label>
+                    <label className="admin-field">
+                      Temps passé (heures)
+                      <input
+                        type="number"
+                        min="0.25"
+                        step="0.25"
+                        value={certificate.hours}
+                        onChange={(event) => setCertificate((current) => ({ ...current, hours: event.target.value }))}
+                        required
+                      />
+                    </label>
+                    <label className="admin-field">
+                      Prix (€)
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={certificate.price}
+                        onChange={(event) => setCertificate((current) => ({ ...current, price: event.target.value }))}
+                        required
+                      />
+                    </label>
+                  </div>
+                  {certificateError && <p className="error">{certificateError}</p>}
+                  <div className="actions">
+                    <button className="btn" type="submit">Imprimer l’attestation</button>
+                  </div>
+                </form>
+              )}
             </section>
           ) : (
             <>

@@ -1,6 +1,9 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const fs = require('fs/promises');
+const path = require('path');
+const { UPLOAD_DIR, UPLOAD_URL_PREFIX, MAX_UPLOAD_BYTES, IMAGE_TYPES } = require('./uploads');
 const { validateService, validateSiteContent } = require('./site-content');
 const {
   encryptSecret,
@@ -52,6 +55,32 @@ module.exports = function adminRouter(pool) {
       res.status(401).json({ error: 'unauthorized' });
     }
   }
+
+  router.post(
+    '/upload',
+    requireAdmin,
+    express.raw({ type: Object.keys(IMAGE_TYPES), limit: MAX_UPLOAD_BYTES }),
+    async (req, res) => {
+      const type = (req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+      const spec = IMAGE_TYPES[type];
+      const body = req.body;
+      if (!spec || !Buffer.isBuffer(body) || body.length === 0) {
+        return res.status(400).json({ error: 'Envoyez une image JPEG, PNG, WebP ou GIF (8 Mo maximum).' });
+      }
+      if (!spec.magic(body)) {
+        return res.status(400).json({ error: 'Le fichier n’est pas une image valide.' });
+      }
+      try {
+        await fs.mkdir(UPLOAD_DIR, { recursive: true });
+        const name = `${crypto.randomUUID()}${spec.ext}`;
+        await fs.writeFile(path.join(UPLOAD_DIR, name), body);
+        res.status(201).json({ url: `${UPLOAD_URL_PREFIX}${name}` });
+      } catch (err) {
+        console.error('Could not save uploaded image:', err.message || err);
+        res.status(500).json({ error: 'Impossible d’enregistrer l’image.' });
+      }
+    }
+  );
 
   router.get('/content', requireAdmin, async (req, res) => {
     try {

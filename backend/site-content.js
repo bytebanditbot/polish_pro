@@ -132,6 +132,7 @@ const isText = (value, maxLength, { optional = false } = {}) =>
 
 const isImageUrl = (value) => {
   if (!isText(value, 2048)) return false;
+  if (/^\/api\/uploads\/[A-Za-z0-9-]+\.(jpg|png|webp|gif)$/.test(value)) return true;
   try {
     return new URL(value).protocol === 'https:';
   } catch {

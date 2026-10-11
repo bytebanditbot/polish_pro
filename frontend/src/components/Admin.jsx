@@ -476,22 +476,38 @@ export default function Admin() {
                 </div>
                 {!selected.email_sent && <p className="error">La notification à l’administrateur n’a pas été envoyée.</p>}
                 {selected.customer_email_sent === false && <p className="error">L’e-mail de confirmation au client n’a pas été envoyé.</p>}
-                  <article className="conversation-message customer">
-                    <div className="conversation-message-heading">
-                      <strong>{selected.customer_name} · Demande envoyée depuis le site</strong>
-                      <time>{new Date(selected.created_at).toLocaleString()}</time>
-                    </div>
-                    <p>{selected.message}</p>
-                  </article>
                 {conversationLoading && <p className="meta">Chargement de la conversation Gmail…</p>}
                 {conversationError && <p className="error">{conversationError}</p>}
-                {!conversationLoading && !conversationError && conversation.map((message) => (
-                  <article className={`conversation-message ${message.direction}`} key={message.id}>
+                {[
+                  {
+                    id: 'initial',
+                    direction: 'customer',
+                    name: selected.customer_name,
+                    label: 'Demande envoyée depuis le site',
+                    date: selected.created_at,
+                    body: selected.message,
+                  },
+                  ...(!conversationLoading && !conversationError
+                    ? conversation.map((message) => ({
+                        id: message.id,
+                        direction: message.direction,
+                        name: message.direction === 'admin' ? 'Vous' : selected.customer_name,
+                        label: message.direction === 'admin' ? 'Polish Pro' : 'Réponse client',
+                        date: message.date,
+                        body: formatConversationBody(message.body),
+                      }))
+                    : []),
+                ].map((item) => (
+                  <article className={`conversation-message is-${item.direction}`} key={item.id}>
                     <div className="conversation-message-heading">
-                      <strong>{message.direction === 'admin' ? 'Vous' : selected.customer_name}</strong>
-                      <time>{new Date(message.date).toLocaleString()}</time>
+                      <span className="conversation-avatar" aria-hidden="true">{item.name.charAt(0).toUpperCase()}</span>
+                      <div className="conversation-message-who">
+                        <strong>{item.name}</strong>
+                        <span>{item.label}</span>
+                      </div>
+                      <time>{formatDateTime(item.date)}</time>
                     </div>
-                    <p>{formatConversationBody(message.body)}</p>
+                    <p>{item.body}</p>
                   </article>
                 ))}
                 {!conversationLoading && !conversationError && conversation.length === 0 && (

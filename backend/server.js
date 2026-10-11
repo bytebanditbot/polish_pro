@@ -1,5 +1,4 @@
 const express = require('express');
-const fs = require('fs');
 const cors = require('cors');
 const { Pool } = require('pg');
 const {
@@ -9,16 +8,25 @@ const {
   isConfigured,
 } = require('./mail');
 const { DEFAULT_SITE_CONTENT } = require('./site-content');
-const { UPLOAD_DIR, UPLOAD_URL_PREFIX } = require('./uploads');
+const { rateLimit } = require('./rate-limit');
 
 const app = express();
 app.use(cors());
-app.use(express.json());
-app.use(UPLOAD_URL_PREFIX.slice(0, -1), express.static(UPLOAD_DIR, {
-  maxAge: '7d',
-  index: false,
-  setHeaders: (res) => res.setHeader('X-Content-Type-Options', 'nosniff'),
-}));
+app.use(express.json({ limit: '100kb' }));
+
+// Behind a reverse proxy (nginx, Traefik...) set TRUST_PROXY=1 so req.ip is the real client IP.
+if (process.env.TRUST_PROXY) app.set('trust proxy', Number(process.env.TRUST_PROXY) || 1);
+
+const inquiryLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Number(process.env.INQUIRY_RATE_LIMIT) || 10,
+  message: 'Trop de demandes envoyées. Réessayez dans quelques minutes.',
+});
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: 'Trop de tentatives de connexion. Réessayez dans quelques minutes.',
+});
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -142,7 +150,7 @@ app.post('/api/bookings', async (req, res) => {
   }
 });
 
-app.post('/api/inquiries', async (req, res) => {
+app.post('/api/inquiries', inquiryLimiter, async (req, res) => {
   const { service_id, customer_name, customer_email, customer_phone, car_model, message } = req.body || {};
 
   if (
@@ -222,10 +230,10 @@ app.post('/api/inquiries', async (req, res) => {
   }
 });
 
+app.post('/api/admin/login', loginLimiter);
 app.use('/api/admin', require('./admin')(pool));
 
 async function start() {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
   await pool.query(`
     CREATE TABLE IF NOT EXISTS site_content (
       id SMALLINT PRIMARY KEY CHECK (id = 1),

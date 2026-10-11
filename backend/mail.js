@@ -191,7 +191,7 @@ async function sendInquiryNotification(inquiry, recipient, mailConfig) {
     to: recipient,
     subject: `New inquiry: ${inquiry.customer_name}`,
     text,
-    html: `<h3>New inquiry received</h3><p><strong>Name:</strong> ${inquiry.customer_name}</p><p><strong>Email:</strong> ${inquiry.customer_email}</p><p><strong>Phone:</strong> ${inquiry.customer_phone || '—'}</p><p><strong>Car:</strong> ${inquiry.car_model || '—'}</p><p><strong>Service:</strong> ${inquiry.service_name || '—'}</p><p><strong>Message:</strong><br>${String(inquiry.message).replace(/\n/g, '<br>')}</p>`,
+    html: `<h3>New inquiry received</h3><p><strong>Name:</strong> ${escapeHtml(inquiry.customer_name)}</p><p><strong>Email:</strong> ${escapeHtml(inquiry.customer_email)}</p><p><strong>Phone:</strong> ${escapeHtml(inquiry.customer_phone || '—')}</p><p><strong>Car:</strong> ${escapeHtml(inquiry.car_model || '—')}</p><p><strong>Service:</strong> ${escapeHtml(inquiry.service_name || '—')}</p><p><strong>Message:</strong><br>${escapeHtml(inquiry.message).replace(/\n/g, '<br>')}</p>`,
   }, mailConfig);
 }
 

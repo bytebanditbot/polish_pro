@@ -1454,3 +1454,6 @@ th { color: var(--muted); font-weight: 500; font-size: 0.85rem; }
   .admin-editor-fields { grid-template-columns: minmax(0, 1fr); }
   .inquiry-facts { grid-template-columns: 1fr; }
 }
+
+.admin .inquiry-conversation,
+.admin .inquiry-message { padding: 1.1rem; }

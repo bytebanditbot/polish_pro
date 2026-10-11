@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import ContentManager from './ContentManager'
 import EmailSettings from './EmailSettings'
+import InquiryTools from './InquiryTools'
 
 function ColumnIcon({ name }) {
   return (
@@ -349,9 +350,16 @@ export default function Admin() {
                     )}
                   </div>
                 </div>
-                <span className={`badge ${selected.archived ? 'archived' : selected.status}`}>
-                  {selected.archived ? '⚪ Archivée' : selected.status === 'handled' ? '🟢 Traitée' : '🔵 Nouvelle'}
-                </span>
+                <div className="inquiry-heading-side">
+                  <span className={`badge ${selected.archived ? 'archived' : selected.status}`}>
+                    {selected.archived ? '⚪ Archivée' : selected.status === 'handled' ? '🟢 Traitée' : '🔵 Nouvelle'}
+                  </span>
+                  <InquiryTools
+                    inquiry={selected}
+                    conversation={conversation}
+                    conversationLoading={conversationLoading}
+                  />
+                </div>
               </div>
 
               <div className="inquiry-facts">
@@ -379,8 +387,10 @@ export default function Admin() {
                 {!selected.email_sent && <p className="error">La notification à l’administrateur n’a pas été envoyée.</p>}
                 {selected.customer_email_sent === false && <p className="error">L’e-mail de confirmation au client n’a pas été envoyé.</p>}
                 <article className="conversation-message customer">
-                  <strong>{selected.customer_name} · Demande envoyée depuis le site</strong>
-                  <time>{new Date(selected.created_at).toLocaleString()}</time>
+                  <div className="conversation-message-heading">
+                    <strong>{selected.customer_name} · Demande envoyée depuis le site</strong>
+                    <time>{new Date(selected.created_at).toLocaleString()}</time>
+                  </div>
                   <p>{selected.message}</p>
                 </article>
                 {conversationLoading && <p className="meta">Chargement de la conversation Gmail…</p>}

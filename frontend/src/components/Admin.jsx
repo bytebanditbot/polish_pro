@@ -366,7 +366,7 @@ export default function Admin() {
 
   if (!token) {
     return (
-      <main className="admin">
+      <main className="admin-page">
         <h1>Connexion administrateur</h1>
         <form className="form" onSubmit={handleLogin}>
           <label>
@@ -382,7 +382,7 @@ export default function Admin() {
   }
 
   return (
-    <main className="admin admin-dashboard">
+    <main className="admin-page admin-dashboard">
     <div className="admin-head">
       <h1>Administration</h1>
       <div className="admin-head-actions">

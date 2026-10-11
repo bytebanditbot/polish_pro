@@ -498,7 +498,7 @@ export default function Admin() {
                       }))
                     : []),
                 ].map((item) => (
-                  <article className={`conversation-message ${item.direction}`} key={item.id}>
+                  <article className={`conversation-message is-${item.direction}`} key={item.id}>
                     <div className="conversation-message-heading">
                       <span className="conversation-avatar" aria-hidden="true">{item.name.charAt(0).toUpperCase()}</span>
                       <div className="conversation-message-who">

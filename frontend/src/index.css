@@ -1392,7 +1392,7 @@ th { color: var(--muted); font-weight: 500; font-size: 0.85rem; }
 .inquiry-message blockquote { margin: 0.65rem 0 0; padding-left: 0.9rem; border-left: 3px solid var(--accent); white-space: pre-wrap; }
 .inquiry-message .error { margin-bottom: 0; }
 .inquiry-section-heading { align-items: center; margin-bottom: 0.8rem; }
-.conversation-message { display: grid; gap: 0.7rem; margin-top: 0.75rem; padding: 1rem 1.1rem; border: 1px solid rgba(255, 255, 255, 0.08); border-left-width: 3px; border-radius: 12px; background: rgba(10, 15, 22, 0.55); }
+.conversation-message { display: grid; grid-template-columns: minmax(0, 1fr); width: 100%; min-width: 0; box-sizing: border-box; gap: 0.7rem; margin-top: 0.75rem; padding: 1rem 1.1rem; border: 1px solid rgba(255, 255, 255, 0.08); border-left-width: 3px; border-radius: 12px; background: rgba(10, 15, 22, 0.55); }
 .conversation-message.customer { border-left-color: rgba(74, 222, 128, 0.6); }
 .conversation-message.admin { border-left-color: rgba(139, 213, 245, 0.7); }
 .conversation-message-heading { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 0.75rem; }

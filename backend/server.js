@@ -1,4 +1,5 @@
 const express = require('express');
+const fs = require('fs');
 const cors = require('cors');
 const { Pool } = require('pg');
 const {
@@ -8,10 +9,16 @@ const {
   isConfigured,
 } = require('./mail');
 const { DEFAULT_SITE_CONTENT } = require('./site-content');
+const { UPLOAD_DIR, UPLOAD_URL_PREFIX } = require('./uploads');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(UPLOAD_URL_PREFIX.slice(0, -1), express.static(UPLOAD_DIR, {
+  maxAge: '7d',
+  index: false,
+  setHeaders: (res) => res.setHeader('X-Content-Type-Options', 'nosniff'),
+}));
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -218,6 +225,7 @@ app.post('/api/inquiries', async (req, res) => {
 app.use('/api/admin', require('./admin')(pool));
 
 async function start() {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
   await pool.query(`
     CREATE TABLE IF NOT EXISTS site_content (
       id SMALLINT PRIMARY KEY CHECK (id = 1),

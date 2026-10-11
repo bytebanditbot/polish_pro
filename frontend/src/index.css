@@ -1457,3 +1457,8 @@ th { color: var(--muted); font-weight: 500; font-size: 0.85rem; }
 
 .admin .inquiry-conversation,
 .admin .inquiry-message { padding: 1.1rem; }
+
+.image-field { gap: 0.5rem; }
+.image-field-upload { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
+.image-field-button { display: inline-flex; align-items: center; cursor: pointer; }
+.image-field-preview { display: block; width: 100%; max-height: 11rem; object-fit: cover; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; background: var(--panel); }

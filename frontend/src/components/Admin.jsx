@@ -46,6 +46,17 @@ function ColumnIcon({ name }) {
   )
 }
 
+function PrintIcon() {
+  return (
+    <svg className="print-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M7 8V3.5h10V8" />
+      <rect x="3.5" y="8" width="17" height="8.5" rx="2" />
+      <path d="M7 14h10v6.5H7z" />
+      <path d="M17 11h.01" />
+    </svg>
+  )
+}
+
 function ContactIcon({ name }) {
   return (
     <svg className="inquiry-contact-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -372,13 +383,19 @@ export default function Admin() {
 
   return (
     <main className="admin admin-dashboard">
-      <div className="admin-head">
-        <h1>Administration</h1>
-        <div>
-          <a href="#/" style={{ marginRight: '1rem' }}>Voir le site</a>
-          <button className="btn" onClick={logout}>Se déconnecter</button>
-        </div>
+    <div className="admin-head">
+      <h1>Administration</h1>
+      <div className="admin-head-actions">
+        <a className="admin-site-link" href="#/">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M2.5 12s3.4-6 9.5-6 9.5 6 9.5 6-3.4 6-9.5 6-9.5-6-9.5-6Z" />
+            <circle cx="12" cy="12" r="2.5" />
+          </svg>
+          Voir le site
+        </a>
+        <button className="btn" onClick={logout}>Se déconnecter</button>
       </div>
+    </div>
 
       <div className="admin-workspace">
         <nav className="admin-pages" aria-label="Sections d’administration">
@@ -422,12 +439,12 @@ export default function Admin() {
                   ← Retour aux demandes
                 </button>
                 <div className="inquiry-print-actions">
-                  <button className="slot" type="button" onClick={() => setPrintDialog('sheet')}>
-                    Imprimer la fiche client
-                  </button>
-                  <button className="slot" type="button" onClick={startCertificate}>
-                    Imprimer l’attestation de travaux
-                  </button>
+<button className="slot" type="button" onClick={() => setPrintDialog('sheet')}>
+  <PrintIcon /> Imprimer la fiche client
+</button>
+<button className="slot" type="button" onClick={startCertificate}>
+  <PrintIcon /> Imprimer l’attestation de travaux
+</button>
                 </div>
               </div>
               <div className="inquiry-detail-heading">
@@ -519,13 +536,13 @@ export default function Admin() {
                 <a className="btn inquiry-reply-action" href={gmailComposeUrl(selected)} target="_blank" rel="noreferrer">
                   <ContactIcon name="email" /> Répondre par e-mail
                 </a>
-                <button
-                  className="slot"
-                  type="button"
-                  onClick={() => updateInquiry(selected.id, { status: selected.status === 'handled' ? 'new' : 'handled' })}
-                >
-                  {selected.status === 'handled' ? 'Rouvrir la demande' : 'Marquer comme traitée'}
-                </button>
+<button
+  className={`slot ${selected.status === 'handled' ? 'action-reopen' : 'action-handle'}`}
+  type="button"
+  onClick={() => updateInquiry(selected.id, { status: selected.status === 'handled' ? 'new' : 'handled' })}
+>
+  {selected.status === 'handled' ? 'Rouvrir la demande' : 'Marquer comme traitée'}
+</button>
                 <button
                   className="slot"
                   type="button"
@@ -551,7 +568,7 @@ export default function Admin() {
                 >
                   {printDialog === 'sheet' && (
                     <div
-                      className="booking-confirmation-panel neutral"
+                      className="booking-confirmation-panel recipient-notice-panel deleted delete-dialog"
                       role="dialog"
                       aria-modal="true"
                       aria-labelledby="print-dialog-title"
@@ -675,15 +692,15 @@ export default function Admin() {
                   </button>
                 ))}
                 <span className="inquiry-export-actions">
-                  <button
-                    className="slot"
-                    type="button"
-                    disabled={shown.length === 0}
-                    title="Choisissez « Enregistrer au format PDF » dans la fenêtre d’impression pour obtenir un PDF"
-                    onClick={() => printInquiries(shown, listTitle)}
-                  >
-                    Imprimer / PDF (A4)
-                  </button>
+<button
+  className="slot"
+  type="button"
+  disabled={shown.length === 0}
+  title="Choisissez « Enregistrer au format PDF » dans la fenêtre d’impression pour obtenir un PDF"
+  onClick={() => printInquiries(shown, listTitle)}
+>
+  <PrintIcon /> Imprimer / PDF (A4)
+</button>
                 </span>
               </div>
               {shown.length === 0 && <p className="meta">Aucune demande.</p>}
@@ -751,44 +768,45 @@ export default function Admin() {
               Cette action est irréversible.
             </p>
 
-            <label>
-              Mot de passe administrateur
-              <input
-                type="password"
-                value={deletePassword}
-                onChange={(event) => {
-                  setDeletePassword(event.target.value)
-                  setDeletePasswordError('')
-                }}
-                placeholder="Saisissez votre mot de passe"
-                autoFocus
-              />
-            </label>
+           <form
+  className="delete-dialog-form"
+  onSubmit={(event) => { event.preventDefault(); confirmDeleteInquiry() }}
+>
+  <label className="admin-field">
+    Mot de passe administrateur
+    <input
+      type="password"
+      value={deletePassword}
+      onChange={(event) => {
+        setDeletePassword(event.target.value)
+        setDeletePasswordError('')
+      }}
+      placeholder="Saisissez votre mot de passe"
+      autoComplete="current-password"
+      autoFocus
+    />
+  </label>
 
-            {deletePasswordError && <p className="error">{deletePasswordError}</p>}
+  {deletePasswordError && <p className="error" role="alert">{deletePasswordError}</p>}
 
-            <div className="inquiry-detail-actions">
-              <button
-                type="button"
-                className="slot"
-                onClick={() => {
-                  setDeleteRequest(null)
-                  setDeletePassword('')
-                  setDeletePasswordError('')
-                }}
-                disabled={deleteSubmitting}
-              >
-                Annuler
-              </button>
-              <button
-                type="button"
-                className="btn"
-                onClick={confirmDeleteInquiry}
-                disabled={deleteSubmitting}
-              >
-                {deleteSubmitting ? 'Suppression…' : 'Supprimer définitivement'}
-              </button>
-            </div>
+  <div className="delete-dialog-actions">
+    <button
+      type="button"
+      className="slot"
+      onClick={() => {
+        setDeleteRequest(null)
+        setDeletePassword('')
+        setDeletePasswordError('')
+      }}
+      disabled={deleteSubmitting}
+    >
+      Annuler
+    </button>
+    <button type="submit" className="btn" disabled={deleteSubmitting}>
+      {deleteSubmitting ? 'Suppression…' : 'Supprimer'}
+    </button>
+  </div>
+</form>
           </section>
         </div>
       )}

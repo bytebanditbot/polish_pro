@@ -28,7 +28,7 @@ export default function EmailSettings({ token, logout }) {
           setNotice({
             type: 'info',
             title: 'Compte e-mail utilisé',
-            message: `Notifications et réponses utilisent : ${data.email}`,
+            message: `Les notifications et réponses sont envoyées à : ${data.email}`,
           })
         }
       }

@@ -1,0 +1,107 @@
+/* Admin extras: image upload, buttons, dialogs, icons */
+.image-field { gap: 0.5rem; }
+.image-field-upload { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
+.image-field-button { display: inline-flex; align-items: center; cursor: pointer; }
+.image-field-preview { display: block; width: 100%; max-height: 11rem; object-fit: cover; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; background: var(--panel); }
+
+.booking-confirmation-panel > p:not(.hero-eyebrow) { overflow-wrap: anywhere; line-height: 1.6; }
+.booking-confirmation-panel .btn { margin-top: 0.25rem; padding-left: 1.6rem; padding-right: 1.6rem; }
+
+.admin-email-settings > .meta { line-height: 1.6; }
+.admin-email-settings .form { gap: 1.1rem; max-width: none; }
+
+.admin-workspace-content .slots { margin: 0 0 1.25rem; }
+.admin-workspace-content .table-wrap { margin-top: 0; }
+
+.admin-head-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
+.admin-page .admin-site-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.72rem 1.15rem;
+  border: 1px solid rgba(139, 213, 245, 0.35);
+  border-radius: 9px;
+  color: var(--accent);
+  background: rgba(139, 213, 245, 0.08);
+  font-size: 0.88rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+.admin-page .admin-site-link svg { width: 1.1rem; height: 1.1rem; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.admin-page .admin-site-link:hover { color: var(--text); border-color: rgba(139, 213, 245, 0.65); background: rgba(139, 213, 245, 0.16); transform: translateY(-1px); }
+.admin-page .admin-site-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* Marquer comme traitée → blue */
+.admin-page .slot.action-handle { color: #bfe6fa; border-color: rgba(96, 165, 250, 0.4); background: rgba(59, 130, 246, 0.12); }
+.admin-page .slot.action-handle:not(.active):hover,
+.admin-page .slot.action-handle:not(.active):focus-visible { color: #fff; border-color: rgba(96, 165, 250, 0.75); background: rgba(59, 130, 246, 0.24); }
+
+/* Rouvrir la demande → green */
+.admin-page .slot.action-reopen { color: #bbf7d0; border-color: rgba(74, 222, 128, 0.4); background: rgba(34, 197, 94, 0.12); }
+.admin-page .slot.action-reopen:not(.active):hover,
+.admin-page .slot.action-reopen:not(.active):focus-visible { color: #fff; border-color: rgba(74, 222, 128, 0.75); background: rgba(34, 197, 94, 0.24); }
+
+/* Supprimer → red */
+.admin-page .slot.danger { color: #fecaca; border-color: rgba(248, 113, 113, 0.4); background: rgba(239, 68, 68, 0.12); }
+.admin-page .slot.danger:hover,
+.admin-page .slot.danger:focus-visible { color: #fff; border-color: rgba(248, 113, 113, 0.8); background: rgba(239, 68, 68, 0.28); }
+
+.delete-dialog > p:not(.hero-eyebrow) { overflow-wrap: anywhere; line-height: 1.6; }
+.delete-dialog-form { display: grid; gap: 1rem; margin-top: 0.5rem; text-align: left; }
+.delete-dialog-form .error { margin: 0; text-align: center; font-size: 0.86rem; }
+.delete-dialog-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; margin-top: 0.25rem; }
+.delete-dialog-actions .slot,
+.delete-dialog-actions .btn { width: 100%; min-height: 46px; text-align: center; }
+@media (max-width: 480px) { .delete-dialog-actions { grid-template-columns: 1fr; } }
+
+.print-icon {
+  flex: 0 0 auto;
+  width: 1.1rem;
+  height: 1.1rem;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.slot:has(.print-icon) { display: inline-flex; align-items: center; gap: 0.5rem; }
+
+.delete-dialog-actions,
+.booking-confirmation-panel .inquiry-detail-actions {
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.delete-dialog-actions .slot,
+.delete-dialog-actions .btn,
+.booking-confirmation-panel .inquiry-detail-actions .slot,
+.booking-confirmation-panel .inquiry-detail-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 8.5rem;
+  height: 2.75rem;
+  margin: 0;
+  padding: 0 1.25rem;
+  border-radius: 9px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+}
+
+.delete-dialog-actions .btn:disabled,
+.delete-dialog-actions .slot:disabled { opacity: 0.5; cursor: not-allowed; }
+
+@media (max-width: 480px) {
+  .delete-dialog-actions,
+  .booking-confirmation-panel .inquiry-detail-actions { flex-direction: column; }
+  .delete-dialog-actions .slot,
+  .delete-dialog-actions .btn,
+  .booking-confirmation-panel .inquiry-detail-actions .slot,
+  .booking-confirmation-panel .inquiry-detail-actions .btn { width: 100%; }
+}

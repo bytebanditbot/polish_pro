@@ -42,6 +42,42 @@ function Field({ label, value, onChange, type = 'text', multiline = false, ...pr
   )
 }
 
+function ImageField({ label, value, onChange, upload }) {
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState('')
+
+  async function handleFile(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    setBusy(true)
+    setMessage('')
+    try {
+      const url = await upload(file)
+      if (url) onChange(url)
+    } catch (uploadError) {
+      setMessage(uploadError.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="admin-field image-field">
+      <Field label={label} value={value} onChange={onChange} required placeholder="https://… ou importez un fichier" />
+      <div className="image-field-upload">
+        <label className="slot image-field-button">
+          {busy ? 'Envoi en cours…' : 'Importer une image'}
+          <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleFile} disabled={busy} hidden />
+        </label>
+        <span className="meta">JPEG, PNG, WebP ou GIF · 8 Mo max</span>
+      </div>
+      {message && <p className="error" role="alert">{message}</p>}
+      {value && <img className="image-field-preview" src={value} alt="Aperçu" />}
+    </div>
+  )
+}
+
 export default function ContentManager({ token, logout, onServicesChanged }) {
   const [section, setSection] = useState('services')
   const [content, setContent] = useState(null)
@@ -67,6 +103,21 @@ export default function ContentManager({ token, logout, onServicesChanged }) {
     const result = response.status === 204 ? {} : await response.json()
     if (!response.ok) throw new Error(result?.error || 'La requête a échoué.')
     return result
+  }, [token, logout])
+
+  const uploadImage = useCallback(async (file) => {
+    const response = await fetch('/api/admin/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': file.type, Authorization: `Bearer ${token}` },
+      body: file,
+    })
+    if (response.status === 401) {
+      logout()
+      return null
+    }
+    const result = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(result.error || 'Impossible d’envoyer l’image.')
+    return result.url
   }, [token, logout])
 
   const load = useCallback(async () => {
@@ -290,7 +341,7 @@ export default function ContentManager({ token, logout, onServicesChanged }) {
                 <div className="admin-editor-fields">
                   <Field label="Libellé" value={item.label} onChange={(value) => updateArrayItem('homeBeforeAfter', index, 'label', value)} required maxLength={30} />
                   <Field label="Texte descriptif" value={item.description} onChange={(value) => updateArrayItem('homeBeforeAfter', index, 'description', value)} multiline required maxLength={500} />
-                  <Field label="URL de l’image" type="url" value={item.image} onChange={(value) => updateArrayItem('homeBeforeAfter', index, 'image', value)} required />
+                  <ImageField label="Image" value={item.image} onChange={(value) => updateArrayItem('homeBeforeAfter', index, 'image', value)} upload={uploadImage} />
                   <Field label="Texte alternatif" value={item.alt} onChange={(value) => updateArrayItem('homeBeforeAfter', index, 'alt', value)} required maxLength={250} />
                 </div>
                 <button className="slot" type="button" onClick={() => removeItem('homeBeforeAfter', index)}>
@@ -323,7 +374,7 @@ export default function ContentManager({ token, logout, onServicesChanged }) {
                     </select>
                   </label>
                   <Field label="Description" value={project.description} onChange={(value) => updateArrayItem('galleryProjects', index, 'description', value)} multiline required maxLength={500} />
-                  <Field label="URL de l’image" type="url" value={project.image} onChange={(value) => updateArrayItem('galleryProjects', index, 'image', value)} required />
+                  <ImageField label="Image" value={project.image} onChange={(value) => updateArrayItem('galleryProjects', index, 'image', value)} upload={uploadImage} />
                   <Field label="Texte alternatif" value={project.alt} onChange={(value) => updateArrayItem('galleryProjects', index, 'alt', value)} required maxLength={250} />
                 </div>
                 <button className="slot" type="button" onClick={() => removeItem('galleryProjects', index)}>Supprimer cette réalisation</button>
@@ -348,7 +399,7 @@ export default function ContentManager({ token, logout, onServicesChanged }) {
                   {['before', 'after'].map((group) => (
                     <div className="admin-editor-subcard" key={group}>
                       <h3>{group === 'before' ? 'Avant' : 'Après'}</h3>
-                      <Field label="URL de l’image" type="url" value={comparison[group].image} onChange={(value) => updateNestedArrayItem('beforeAfter', index, group, 'image', value)} required />
+                      <ImageField label="Image" value={comparison[group].image} onChange={(value) => updateNestedArrayItem('beforeAfter', index, group, 'image', value)} upload={uploadImage} />
                       <Field label="Texte alternatif" value={comparison[group].alt} onChange={(value) => updateNestedArrayItem('beforeAfter', index, group, 'alt', value)} required maxLength={250} />
                     </div>
                   ))}

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import ContentManager from './ContentManager'
 import EmailSettings from './EmailSettings'
-import InquiryTools from './InquiryTools'
+import { printCertificate, printClientSheet, printInquiries } from './inquiryExport'
 
 function ColumnIcon({ name }) {
   return (
@@ -46,6 +46,17 @@ function ColumnIcon({ name }) {
   )
 }
 
+function PrintIcon() {
+  return (
+    <svg className="print-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M7 8V3.5h10V8" />
+      <rect x="3.5" y="8" width="17" height="8.5" rx="2" />
+      <path d="M7 14h10v6.5H7z" />
+      <path d="M17 11h.01" />
+    </svg>
+  )
+}
+
 function ContactIcon({ name }) {
   return (
     <svg className="inquiry-contact-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -82,6 +93,10 @@ export default function Admin() {
   const [deletePassword, setDeletePassword] = useState('')
   const [deletePasswordError, setDeletePasswordError] = useState('')
   const [deleteSubmitting, setDeleteSubmitting] = useState(false)
+  // Print pop-ups: null | 'sheet' | 'certificate-ask' | 'certificate-form'
+  const [printDialog, setPrintDialog] = useState(null)
+  const [certificate, setCertificate] = useState({ date: '', hours: '', price: '' })
+  const [certificateError, setCertificateError] = useState('')
 
   const logout = useCallback(() => {
     sessionStorage.removeItem('adminToken')
@@ -108,6 +123,87 @@ export default function Admin() {
   }, [token, load])
 
   const selected = items.find((item) => item.id === selectedId)
+
+  useEffect(() => {
+    setPrintDialog(null)
+    setCertificateError('')
+  }, [selectedId])
+
+  useEffect(() => {
+    if (!printDialog) return undefined
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setPrintDialog(null)
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [printDialog])
+
+  function certificateDefaults(inquiry) {
+    return {
+      date: new Date().toLocaleDateString('sv-SE'),
+      hours: inquiry.service_duration_min
+        ? String(Math.round((inquiry.service_duration_min / 60) * 100) / 100)
+        : '',
+      price: inquiry.service_price_eur != null ? String(inquiry.service_price_eur) : '',
+    }
+  }
+
+  function validateCertificate(values) {
+    const hours = Number(values.hours)
+    const price = Number(values.price)
+    if (!values.date || !(hours > 0) || values.price === '' || !(price >= 0)) return null
+    return { date: values.date, minutes: Math.round(hours * 60), price }
+  }
+
+  async function printCertificateWith(details) {
+    let business = null
+    try {
+      const res = await fetch('/api/content')
+      if (res.ok) {
+        const { contact } = await res.json()
+        business = { address: contact?.address, phone: contact?.phone }
+      }
+    } catch {
+      // The certificate still prints without the business details.
+    }
+    printCertificate(selected, details, business)
+  }
+
+  function startCertificate() {
+    const defaults = certificateDefaults(selected)
+    setCertificate(defaults)
+    setCertificateError('')
+    // Without a usable service duration or price there is nothing to print
+    // as-is, so go straight to the form.
+    setPrintDialog(validateCertificate(defaults) ? 'certificate-ask' : 'certificate-form')
+  }
+
+  function printSheet(withConversation) {
+    printClientSheet(selected, withConversation ? conversation : null)
+    setPrintDialog(null)
+  }
+
+  async function printCertificateAsIs() {
+    const details = validateCertificate(certificate)
+    if (!details) {
+      setPrintDialog('certificate-form')
+      return
+    }
+    setPrintDialog(null)
+    await printCertificateWith(details)
+  }
+
+  async function handlePrintCertificate(event) {
+    event.preventDefault()
+    const details = validateCertificate(certificate)
+    if (!details) {
+      setCertificateError('Indiquez une date, un temps passé supérieur à 0 et un prix valide.')
+      return
+    }
+    setCertificateError('')
+    setPrintDialog(null)
+    await printCertificateWith(details)
+  }
 
   const shown = filter === 'archived'
     ? items.filter((item) => item.archived)
@@ -175,6 +271,8 @@ export default function Admin() {
       setError('Impossible de joindre le serveur.')
     }
   }
+
+  const listTitle = `Demandes ${filter === 'new' ? 'nouvelles' : filter === 'handled' ? 'traitées' : 'archivées'}`
 
   function formatDateOnly(value) {
     const date = new Date(value)
@@ -268,7 +366,7 @@ export default function Admin() {
 
   if (!token) {
     return (
-      <main className="admin">
+      <main className="admin-page">
         <h1>Connexion administrateur</h1>
         <form className="form" onSubmit={handleLogin}>
           <label>
@@ -284,14 +382,20 @@ export default function Admin() {
   }
 
   return (
-    <main className="admin admin-dashboard">
-      <div className="admin-head">
-        <h1>Administration</h1>
-        <div>
-          <a href="#/" style={{ marginRight: '1rem' }}>Voir le site</a>
-          <button className="btn" onClick={logout}>Se déconnecter</button>
-        </div>
+    <main className="admin-page admin-dashboard">
+    <div className="admin-head">
+      <h1>Administration</h1>
+      <div className="admin-head-actions">
+        <a className="admin-site-link" href="#/">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M2.5 12s3.4-6 9.5-6 9.5 6 9.5 6-3.4 6-9.5 6-9.5-6-9.5-6Z" />
+            <circle cx="12" cy="12" r="2.5" />
+          </svg>
+          Voir le site
+        </a>
+        <button className="btn" onClick={logout}>Se déconnecter</button>
       </div>
+    </div>
 
       <div className="admin-workspace">
         <nav className="admin-pages" aria-label="Sections d’administration">
@@ -330,9 +434,19 @@ export default function Admin() {
           {error && <p className="error">{error}</p>}
           {selected ? (
             <section className="inquiry-detail">
-              <button className="slot inquiry-back" type="button" onClick={() => setSelectedId(null)}>
-                ← Retour aux demandes
-              </button>
+              <div className="inquiry-topbar">
+                <button className="slot" type="button" onClick={() => setSelectedId(null)}>
+                  ← Retour aux demandes
+                </button>
+                <div className="inquiry-print-actions">
+<button className="slot" type="button" onClick={() => setPrintDialog('sheet')}>
+  <PrintIcon /> Imprimer la fiche client
+</button>
+<button className="slot" type="button" onClick={startCertificate}>
+  <PrintIcon /> Imprimer l’attestation de travaux
+</button>
+                </div>
+              </div>
               <div className="inquiry-detail-heading">
                 <div className="inquiry-customer">
                   <p className="inquiry-detail-eyebrow">Demande client</p>
@@ -350,16 +464,9 @@ export default function Admin() {
                     )}
                   </div>
                 </div>
-                <div className="inquiry-heading-side">
-                  <span className={`badge ${selected.archived ? 'archived' : selected.status}`}>
-                    {selected.archived ? '⚪ Archivée' : selected.status === 'handled' ? '🟢 Traitée' : '🔵 Nouvelle'}
-                  </span>
-                  <InquiryTools
-                    inquiry={selected}
-                    conversation={conversation}
-                    conversationLoading={conversationLoading}
-                  />
-                </div>
+                <span className={`badge ${selected.archived ? 'archived' : selected.status}`}>
+                  {selected.archived ? '⚪ Archivée' : selected.status === 'handled' ? '🟢 Traitée' : '🔵 Nouvelle'}
+                </span>
               </div>
 
               <div className="inquiry-facts">
@@ -386,22 +493,38 @@ export default function Admin() {
                 </div>
                 {!selected.email_sent && <p className="error">La notification à l’administrateur n’a pas été envoyée.</p>}
                 {selected.customer_email_sent === false && <p className="error">L’e-mail de confirmation au client n’a pas été envoyé.</p>}
-                <article className="conversation-message customer">
-                  <div className="conversation-message-heading">
-                    <strong>{selected.customer_name} · Demande envoyée depuis le site</strong>
-                    <time>{new Date(selected.created_at).toLocaleString()}</time>
-                  </div>
-                  <p>{selected.message}</p>
-                </article>
                 {conversationLoading && <p className="meta">Chargement de la conversation Gmail…</p>}
                 {conversationError && <p className="error">{conversationError}</p>}
-                {!conversationLoading && !conversationError && conversation.map((message) => (
-                  <article className={`conversation-message ${message.direction}`} key={message.id}>
+                {[
+                  {
+                    id: 'initial',
+                    direction: 'customer',
+                    name: selected.customer_name,
+                    label: 'Demande envoyée depuis le site',
+                    date: selected.created_at,
+                    body: selected.message,
+                  },
+                  ...(!conversationLoading && !conversationError
+                    ? conversation.map((message) => ({
+                        id: message.id,
+                        direction: message.direction,
+                        name: message.direction === 'admin' ? 'Vous' : selected.customer_name,
+                        label: message.direction === 'admin' ? 'Polish Pro' : 'Réponse client',
+                        date: message.date,
+                        body: formatConversationBody(message.body),
+                      }))
+                    : []),
+                ].map((item) => (
+                  <article className={`conversation-message is-${item.direction}`} key={item.id}>
                     <div className="conversation-message-heading">
-                      <strong>{message.direction === 'admin' ? 'Vous' : selected.customer_name}</strong>
-                      <time>{new Date(message.date).toLocaleString()}</time>
+                      <span className="conversation-avatar" aria-hidden="true">{item.name.charAt(0).toUpperCase()}</span>
+                      <div className="conversation-message-who">
+                        <strong>{item.name}</strong>
+                        <span>{item.label}</span>
+                      </div>
+                      <time>{formatDateTime(item.date)}</time>
                     </div>
-                    <p>{formatConversationBody(message.body)}</p>
+                    <p>{item.body}</p>
                   </article>
                 ))}
                 {!conversationLoading && !conversationError && conversation.length === 0 && (
@@ -413,13 +536,13 @@ export default function Admin() {
                 <a className="btn inquiry-reply-action" href={gmailComposeUrl(selected)} target="_blank" rel="noreferrer">
                   <ContactIcon name="email" /> Répondre par e-mail
                 </a>
-                <button
-                  className="slot"
-                  type="button"
-                  onClick={() => updateInquiry(selected.id, { status: selected.status === 'handled' ? 'new' : 'handled' })}
-                >
-                  {selected.status === 'handled' ? 'Rouvrir la demande' : 'Marquer comme traitée'}
-                </button>
+<button
+  className={`slot ${selected.status === 'handled' ? 'action-reopen' : 'action-handle'}`}
+  type="button"
+  onClick={() => updateInquiry(selected.id, { status: selected.status === 'handled' ? 'new' : 'handled' })}
+>
+  {selected.status === 'handled' ? 'Rouvrir la demande' : 'Marquer comme traitée'}
+</button>
                 <button
                   className="slot"
                   type="button"
@@ -435,6 +558,130 @@ export default function Admin() {
                   Supprimer
                 </button>
               </div>
+
+              {printDialog && (
+                <div
+                  className="booking-confirmation"
+                  onMouseDown={(event) => {
+                    if (event.target === event.currentTarget) setPrintDialog(null)
+                  }}
+                >
+                  {printDialog === 'sheet' && (
+                    <div
+                      className="booking-confirmation-panel recipient-notice-panel deleted delete-dialog"
+                      role="dialog"
+                      aria-modal="true"
+                      aria-labelledby="print-dialog-title"
+                    >
+                      <span className="booking-confirmation-mark" aria-hidden="true">?</span>
+                      <p className="hero-eyebrow">Fiche client</p>
+                      <h2 id="print-dialog-title">Inclure la conversation e-mail ?</h2>
+                      <p>
+                        La fiche contient toujours les informations du client et son message. Voulez-vous
+                        aussi imprimer les échanges d’e-mails ?
+                      </p>
+                      {conversationLoading && <p className="meta">Chargement de la conversation Gmail…</p>}
+                      <div className="print-dialog-actions">
+                        <button className="slot" type="button" autoFocus onClick={() => printSheet(false)}>
+                          Non
+                        </button>
+                        <button
+                          className="btn"
+                          type="button"
+                          disabled={conversationLoading}
+                          onClick={() => printSheet(true)}
+                        >
+                          Oui
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {printDialog === 'certificate-ask' && (
+                    <div
+                      className="booking-confirmation-panel neutral"
+                      role="dialog"
+                      aria-modal="true"
+                      aria-labelledby="print-dialog-title"
+                    >
+                      <span className="booking-confirmation-mark" aria-hidden="true">?</span>
+                      <p className="hero-eyebrow">Attestation de travaux</p>
+                      <h2 id="print-dialog-title">Voulez-vous faire des modifications ?</h2>
+                      <p>
+                        Date de fin : {certificate.date.split('-').reverse().join('/')} · temps passé :{' '}
+                        {certificate.hours} h · prix : {certificate.price} €. Ces valeurs viennent du
+                        service.
+                      </p>
+                      <div className="print-dialog-actions">
+                        <button className="slot" type="button" autoFocus onClick={printCertificateAsIs}>
+                          Non, imprimer
+                        </button>
+                        <button className="btn" type="button" onClick={() => setPrintDialog('certificate-form')}>
+                          Oui, modifier
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {printDialog === 'certificate-form' && (
+                    <form
+                      className="booking-confirmation-panel neutral print-dialog-form"
+                      role="dialog"
+                      aria-modal="true"
+                      aria-labelledby="print-dialog-title"
+                      onSubmit={handlePrintCertificate}
+                    >
+                      <p className="hero-eyebrow">Attestation de travaux</p>
+                      <h2 id="print-dialog-title">Attestation de travaux</h2>
+                      <p>
+                        Les valeurs sont préremplies à partir du service. Ajustez la date de fin, le temps
+                        réellement passé et le prix avant d’imprimer.
+                      </p>
+                      <div className="print-dialog-fields">
+                        <label className="admin-field">
+                          Date de fin des travaux
+                          <input
+                            type="date"
+                            value={certificate.date}
+                            onChange={(event) => setCertificate((current) => ({ ...current, date: event.target.value }))}
+                            required
+                            autoFocus
+                          />
+                        </label>
+                        <label className="admin-field">
+                          Temps passé (heures)
+                          <input
+                            type="number"
+                            min="0.25"
+                            step="0.25"
+                            value={certificate.hours}
+                            onChange={(event) => setCertificate((current) => ({ ...current, hours: event.target.value }))}
+                            required
+                          />
+                        </label>
+                        <label className="admin-field">
+                          Prix (€)
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={certificate.price}
+                            onChange={(event) => setCertificate((current) => ({ ...current, price: event.target.value }))}
+                            required
+                          />
+                        </label>
+                      </div>
+                      {certificateError && <p className="error">{certificateError}</p>}
+                      <div className="print-dialog-actions">
+                        <button className="slot" type="button" onClick={() => setPrintDialog(null)}>
+                          Annuler
+                        </button>
+                        <button className="btn" type="submit">Imprimer l’attestation</button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+              )}
             </section>
           ) : (
             <>
@@ -444,6 +691,17 @@ export default function Admin() {
                     {f === 'new' ? 'Nouvelles' : f === 'handled' ? 'Traitées' : 'Archivées'}
                   </button>
                 ))}
+                <span className="inquiry-export-actions">
+<button
+  className="slot"
+  type="button"
+  disabled={shown.length === 0}
+  title="Choisissez « Enregistrer au format PDF » dans la fenêtre d’impression pour obtenir un PDF"
+  onClick={() => printInquiries(shown, listTitle)}
+>
+  <PrintIcon /> Imprimer / PDF (A4)
+</button>
+                </span>
               </div>
               {shown.length === 0 && <p className="meta">Aucune demande.</p>}
               <div className="table-wrap">
@@ -510,44 +768,45 @@ export default function Admin() {
               Cette action est irréversible.
             </p>
 
-            <label>
-              Mot de passe administrateur
-              <input
-                type="password"
-                value={deletePassword}
-                onChange={(event) => {
-                  setDeletePassword(event.target.value)
-                  setDeletePasswordError('')
-                }}
-                placeholder="Saisissez votre mot de passe"
-                autoFocus
-              />
-            </label>
+           <form
+  className="delete-dialog-form"
+  onSubmit={(event) => { event.preventDefault(); confirmDeleteInquiry() }}
+>
+  <label className="admin-field">
+    Mot de passe administrateur
+    <input
+      type="password"
+      value={deletePassword}
+      onChange={(event) => {
+        setDeletePassword(event.target.value)
+        setDeletePasswordError('')
+      }}
+      placeholder="Saisissez votre mot de passe"
+      autoComplete="current-password"
+      autoFocus
+    />
+  </label>
 
-            {deletePasswordError && <p className="error">{deletePasswordError}</p>}
+  {deletePasswordError && <p className="error" role="alert">{deletePasswordError}</p>}
 
-            <div className="inquiry-detail-actions">
-              <button
-                type="button"
-                className="slot"
-                onClick={() => {
-                  setDeleteRequest(null)
-                  setDeletePassword('')
-                  setDeletePasswordError('')
-                }}
-                disabled={deleteSubmitting}
-              >
-                Annuler
-              </button>
-              <button
-                type="button"
-                className="btn"
-                onClick={confirmDeleteInquiry}
-                disabled={deleteSubmitting}
-              >
-                {deleteSubmitting ? 'Suppression…' : 'Supprimer définitivement'}
-              </button>
-            </div>
+  <div className="delete-dialog-actions">
+    <button
+      type="button"
+      className="slot"
+      onClick={() => {
+        setDeleteRequest(null)
+        setDeletePassword('')
+        setDeletePasswordError('')
+      }}
+      disabled={deleteSubmitting}
+    >
+      Annuler
+    </button>
+    <button type="submit" className="btn" disabled={deleteSubmitting}>
+      {deleteSubmitting ? 'Suppression…' : 'Supprimer'}
+    </button>
+  </div>
+</form>
           </section>
         </div>
       )}

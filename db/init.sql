@@ -6,18 +6,6 @@ CREATE TABLE services (
   duration_min INTEGER NOT NULL
 );
 
-CREATE TABLE bookings (
-  id SERIAL PRIMARY KEY,
-  service_id INTEGER REFERENCES services(id),
-  customer_name TEXT NOT NULL,
-  customer_email TEXT NOT NULL,
-  customer_phone TEXT,
-  car_model TEXT,
-  slot_start TIMESTAMP NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending',
-  created_at TIMESTAMP NOT NULL DEFAULT now()
-);
-
 CREATE TABLE inquiries (
   id SERIAL PRIMARY KEY,
   service_id INTEGER REFERENCES services(id),

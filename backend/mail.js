@@ -53,22 +53,44 @@ async function sendMail({ to, subject, html, text }, mailConfig) {
   });
 }
 
+// Mail credentials are encrypted with their own key (ENCRYPTION_KEY), separate from JWT_SECRET,
+// so rotating the login-token secret never makes the stored Gmail password unreadable.
+//   v2: encrypted with ENCRYPTION_KEY (current format)
+//   v1: legacy format, encrypted with a key derived from JWT_SECRET (still readable, upgraded on first use)
+const keyFromSecret = (secret) => crypto.createHash('sha256').update(secret).digest();
+
+function currentKey() {
+  const secret = process.env.ENCRYPTION_KEY;
+  if (!secret || secret.length < 32) {
+    throw new Error(
+      'ENCRYPTION_KEY (at least 32 characters) is required for mail credentials. Generate one with: openssl rand -hex 32'
+    );
+  }
+  return keyFromSecret(secret);
+}
+
+function legacyKey() {
+  if (!process.env.JWT_SECRET) {
+    throw new Error('JWT_SECRET is required to read mail credentials saved in the legacy format');
+  }
+  return keyFromSecret(process.env.JWT_SECRET);
+}
+
+const hasCurrentKey = () => Boolean(process.env.ENCRYPTION_KEY && process.env.ENCRYPTION_KEY.length >= 32);
+
 function encryptSecret(value) {
-  if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET is required to encrypt mail credentials');
-  const key = crypto.createHash('sha256').update(process.env.JWT_SECRET).digest();
   const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const cipher = crypto.createCipheriv('aes-256-gcm', currentKey(), iv);
   const encrypted = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
-  return `v1:${iv.toString('base64url')}:${cipher.getAuthTag().toString('base64url')}:${encrypted.toString('base64url')}`;
+  return `v2:${iv.toString('base64url')}:${cipher.getAuthTag().toString('base64url')}:${encrypted.toString('base64url')}`;
 }
 
 function decryptSecret(value) {
-  if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET is required to decrypt mail credentials');
   const [version, ivValue, tagValue, encryptedValue] = value.split(':');
-  if (version !== 'v1' || !ivValue || !tagValue || !encryptedValue) {
+  if ((version !== 'v1' && version !== 'v2') || !ivValue || !tagValue || !encryptedValue) {
     throw new Error('Stored mail credential has an unsupported format');
   }
-  const key = crypto.createHash('sha256').update(process.env.JWT_SECRET).digest();
+  const key = version === 'v2' ? currentKey() : legacyKey();
   const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(ivValue, 'base64url'));
   decipher.setAuthTag(Buffer.from(tagValue, 'base64url'));
   return Buffer.concat([
@@ -83,7 +105,19 @@ async function getStoredMailConfig(pool) {
   );
   const row = rows[0];
   if (!row?.smtp_user || !row.smtp_pass_encrypted) return null;
-  return { user: row.smtp_user, password: decryptSecret(row.smtp_pass_encrypted) };
+  const password = decryptSecret(row.smtp_pass_encrypted);
+  // Upgrade a legacy (v1) value to the dedicated key as soon as ENCRYPTION_KEY is available.
+  if (row.smtp_pass_encrypted.startsWith('v1:') && hasCurrentKey()) {
+    try {
+      await pool.query(
+        'UPDATE email_settings SET smtp_pass_encrypted = $1 WHERE id = 1 AND smtp_pass_encrypted = $2',
+        [encryptSecret(password), row.smtp_pass_encrypted]
+      );
+    } catch (err) {
+      console.error('Could not upgrade stored mail credential:', err.message || err);
+    }
+  }
+  return { user: row.smtp_user, password };
 }
 
 async function getInquiryConversation(pool, inquiryId) {

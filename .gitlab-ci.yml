@@ -1,0 +1,114 @@
+# GitLab CI/CD pipeline for Polish Pro.
+# Runs on every branch push and merge request. Stages: check -> test -> build.
+#
+# check : quick static checks (backend syntax, frontend lint, compose files)
+# test  : GitLab's built-in security scans (SAST and secret detection)
+# build : builds the frontend, then builds the Docker images
+#         (images are pushed to the GitLab Container Registry from the default branch only)
+
+stages:
+  - check
+  - test
+  - build
+
+# Run one pipeline per push, or per merge request, not both.
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+
+# Security scans provided by GitLab (they add their own jobs to the "test" stage).
+include:
+  - template: Security/SAST.gitlab-ci.yml
+  - template: Security/Secret-Detection.gitlab-ci.yml
+
+default:
+  interruptible: true
+
+variables:
+  NODE_IMAGE: node:20-alpine
+  DOCKER_IMAGE: docker:27
+
+# ---------------------------------------------------------------- check
+
+backend-syntax:
+  stage: check
+  image: $NODE_IMAGE
+  script:
+    - cd backend
+    - |
+      for f in *.js; do
+        echo "checking $f"
+        node --check "$f"
+      done
+
+frontend-lint:
+  stage: check
+  image: $NODE_IMAGE
+  cache:
+    key:
+      files:
+        - frontend/package.json
+    paths:
+      - frontend/.npm/
+  script:
+    - cd frontend
+    - npm install --cache .npm --prefer-offline --no-audit --no-fund
+    - npm run lint
+  # The lint rules have never been enforced on this project. Report problems without
+  # blocking the pipeline for now; remove this line once the warnings are fixed.
+  allow_failure: true
+
+compose-config:
+  stage: check
+  image:
+    name: $DOCKER_IMAGE
+    entrypoint: [""]
+  script:
+    - cp .env.example .env
+    - docker compose -f docker-compose.yml config --quiet
+    - docker compose -f docker-compose.prod.yml config --quiet
+
+# ---------------------------------------------------------------- build
+
+frontend-build:
+  stage: build
+  image: $NODE_IMAGE
+  cache:
+    key:
+      files:
+        - frontend/package.json
+    paths:
+      - frontend/.npm/
+  script:
+    - cd frontend
+    - npm install --cache .npm --prefer-offline --no-audit --no-fund
+    - npm run build
+  artifacts:
+    paths:
+      - frontend/dist/
+    expire_in: 1 day
+
+docker-images:
+  stage: build
+  image: $DOCKER_IMAGE
+  services:
+    - docker:27-dind
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+  script:
+    - docker build -t "$CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHORT_SHA" ./backend
+    - docker build -f frontend/Dockerfile.prod -t "$CI_REGISTRY_IMAGE/web:$CI_COMMIT_SHORT_SHA" ./frontend
+    - |
+      if [ "$CI_COMMIT_BRANCH" = "$CI_DEFAULT_BRANCH" ]; then
+        docker tag "$CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHORT_SHA" "$CI_REGISTRY_IMAGE/backend:latest"
+        docker tag "$CI_REGISTRY_IMAGE/web:$CI_COMMIT_SHORT_SHA" "$CI_REGISTRY_IMAGE/web:latest"
+        docker push --all-tags "$CI_REGISTRY_IMAGE/backend"
+        docker push --all-tags "$CI_REGISTRY_IMAGE/web"
+      else
+        echo "Not the default branch: images were built but not pushed."
+      fi

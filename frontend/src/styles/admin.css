@@ -220,7 +220,7 @@ th { color: var(--muted); font-weight: 500; font-size: 0.85rem; }
 .admin-login-card {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   width: 100%;
   max-width: 24rem;
   padding: 2rem 1.75rem 1.5rem;
@@ -228,7 +228,7 @@ th { color: var(--muted); font-weight: 500; font-size: 0.85rem; }
   border-radius: 16px;
   background: linear-gradient(145deg, rgba(23, 32, 43, 0.99), rgba(12, 18, 26, 0.99));
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
-  text-align: center;
+  text-align: left;
 }
 
 .admin-login-icon {
@@ -236,7 +236,7 @@ th { color: var(--muted); font-weight: 500; font-size: 0.85rem; }
   place-items: center;
   width: 3rem;
   height: 3rem;
-  margin-bottom: 1rem;
+  margin: 0 0 1rem;
   border: 1px solid rgba(139, 213, 245, 0.45);
   border-radius: 50%;
   color: var(--accent);
@@ -268,6 +268,8 @@ th { color: var(--muted); font-weight: 500; font-size: 0.85rem; }
 }
 
 .admin-login-form label {
+  display: block;
+  margin: 0;
   font-size: 0.82rem;
   font-weight: 600;
   color: #c5cfda;
@@ -302,6 +304,7 @@ th { color: var(--muted); font-weight: 500; font-size: 0.85rem; }
 }
 
 .admin-login-back {
+  align-self: flex-start;
   margin-top: 1.25rem;
   color: var(--muted);
   font-size: 0.84rem;

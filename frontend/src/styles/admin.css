@@ -202,3 +202,109 @@ th { color: var(--muted); font-weight: 500; font-size: 0.85rem; }
   .admin-editor-fields { grid-template-columns: minmax(0, 1fr); }
   .inquiry-facts { grid-template-columns: 1fr; }
 }
+
+
+
+.admin-login-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(3, 7, 12, 0.84);
+  backdrop-filter: blur(10px);
+}
+
+.admin-login-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 24rem;
+  padding: 2rem 1.75rem 1.5rem;
+  border: 1px solid rgba(139, 213, 245, 0.28);
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgba(23, 32, 43, 0.99), rgba(12, 18, 26, 0.99));
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  text-align: center;
+}
+
+.admin-login-icon {
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  margin-bottom: 1rem;
+  border: 1px solid rgba(139, 213, 245, 0.45);
+  border-radius: 50%;
+  color: var(--accent);
+  background: rgba(139, 213, 245, 0.12);
+}
+.admin-login-icon svg { width: 1.35rem; height: 1.35rem; }
+
+.admin-login-eyebrow {
+  margin: 0 0 0.35rem;
+  color: var(--accent);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.admin-login-card h1 {
+  margin: 0 0 1.5rem;
+  font-size: 1.35rem;
+  line-height: 1.25;
+}
+
+.admin-login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+  text-align: left;
+}
+
+.admin-login-form label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #c5cfda;
+}
+
+.admin-login-form input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  color: var(--text);
+  background: rgba(10, 15, 22, 0.72);
+  font-size: 0.94rem;
+}
+.admin-login-form input:focus {
+  border-color: rgba(139, 213, 245, 0.7);
+  background: rgba(10, 15, 22, 0.95);
+  outline: none;
+}
+
+.admin-login-form .btn {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 0.75rem;
+}
+
+.admin-login-error {
+  margin: 0.25rem 0 0;
+  color: var(--bad);
+  font-size: 0.84rem;
+}
+
+.admin-login-back {
+  margin-top: 1.25rem;
+  color: var(--muted);
+  font-size: 0.84rem;
+  text-decoration: none;
+}
+.admin-login-back:hover { color: var(--text); }

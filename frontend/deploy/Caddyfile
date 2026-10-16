@@ -4,7 +4,7 @@
 {$DOMAIN:localhost} {
 	encode zstd gzip
 
-	# API and uploaded images go to the backend. Uploads are capped at 10 MB here, 8 MB in the app.
+	# API and uploaded images go to the backend. Uploads are capped at 10 MB here, 4 MB in the app.
 	handle /api/* {
 		request_body {
 			max_size 10MB

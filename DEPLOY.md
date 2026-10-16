@@ -1,3 +1,5 @@
+> Deploying on Vercel instead of a VPS? See [VERCEL.md](VERCEL.md).
+
 # Putting Polish Pro online
 
 The production stack (`docker-compose.prod.yml`) runs four containers:

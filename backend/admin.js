@@ -3,7 +3,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const fs = require('fs/promises');
 const path = require('path');
-const { UPLOAD_DIR, UPLOAD_URL_PREFIX, MAX_UPLOAD_BYTES, IMAGE_TYPES } = require('./uploads');
+const { UPLOAD_DIR, UPLOAD_URL_PREFIX, USE_DB_UPLOADS, MAX_UPLOAD_BYTES, IMAGE_TYPES } = require('./uploads');
 const { validateService, validateSiteContent } = require('./site-content');
 const {
   encryptSecret,
@@ -65,15 +65,22 @@ module.exports = function adminRouter(pool) {
       const spec = IMAGE_TYPES[type];
       const body = req.body;
       if (!spec || !Buffer.isBuffer(body) || body.length === 0) {
-        return res.status(400).json({ error: 'Envoyez une image JPEG, PNG, WebP ou GIF (8 Mo maximum).' });
+        return res.status(400).json({ error: 'Envoyez une image JPEG, PNG, WebP ou GIF (4 Mo maximum).' });
       }
       if (!spec.magic(body)) {
         return res.status(400).json({ error: 'Le fichier n’est pas une image valide.' });
       }
       try {
-        await fs.mkdir(UPLOAD_DIR, { recursive: true });
         const name = `${crypto.randomUUID()}${spec.ext}`;
-        await fs.writeFile(path.join(UPLOAD_DIR, name), body);
+        if (USE_DB_UPLOADS) {
+          await pool.query(
+            'INSERT INTO uploads (name, content_type, data) VALUES ($1, $2, $3)',
+            [name, type, body]
+          );
+        } else {
+          await fs.mkdir(UPLOAD_DIR, { recursive: true });
+          await fs.writeFile(path.join(UPLOAD_DIR, name), body);
+        }
         res.status(201).json({ url: `${UPLOAD_URL_PREFIX}${name}` });
       } catch (err) {
         console.error('Could not save uploaded image:', err.message || err);

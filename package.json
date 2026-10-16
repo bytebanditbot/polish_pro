@@ -1,0 +1,19 @@
+{
+  "name": "polish-pro",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Polish Pro - Vercel root (serverless API in ./api + static frontend built from ./frontend)",
+  "engines": { "node": "20.x" },
+  "scripts": {
+    "db:init": "node scripts/init-db.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "imapflow": "^1.0.181",
+    "jsonwebtoken": "^9.0.2",
+    "mailparser": "^3.7.2",
+    "nodemailer": "^10.0.14",
+    "pg": "^8.12.0"
+  }
+}

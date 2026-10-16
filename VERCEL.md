@@ -7,13 +7,10 @@ Vercel has no database of its own: use **Neon Postgres** from the Vercel Marketp
 
 ## 1. Database
 
-1. Vercel dashboard -> your project -> **Storage** -> **Create Database** -> **Neon**.
-   This adds a `DATABASE_URL` environment variable to the project.
-2. Create the tables once, from your computer (use the same URL; copy it from Neon or Vercel -> Settings -> Environment Variables):
-   ```bash
-   npm install
-   DATABASE_URL="postgres://..." npm run db:init
-   ```
+Vercel dashboard -> your project -> **Storage** -> **Create Database** -> **Neon**. Connect it to the project:
+this adds the `DATABASE_URL` environment variable. **Nothing else to do**: on the first request the API creates
+the tables and the default services by itself (from `db/init.sql`, once, safe to restart).
+`npm run db:init` still exists if you prefer to initialize the database by hand.
 
 ## 2. Environment variables (Vercel -> Settings -> Environment Variables)
 
@@ -40,5 +37,5 @@ log in and set the Gmail account under **E-mail**.
 - **Rate limiting** (login, inquiries) is in memory, so it is per function instance: it slows brute-force
   attempts but is not an exact global limit.
 - **Gmail conversation sync** (IMAP) opens a new connection per request; the function timeout is set to 30 s.
-- Cold starts re-run the idempotent schema checks once per instance.
+- Cold starts re-run the idempotent schema checks once per instance; the very first request on an empty database also creates the tables.
 - The Docker `backup` service does not apply here: use Neon's backups / point-in-time restore.

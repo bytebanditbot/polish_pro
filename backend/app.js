@@ -204,7 +204,26 @@ app.post('/api/inquiries', inquiryLimiter, async (req, res) => {
 app.post('/api/admin/login', loginLimiter);
 app.use('/api/admin', require('./admin')(pool));
 
+// First start on an empty database: create the base tables and default services from db/init.sql.
+// An advisory lock keeps two cold-starting instances from running it at the same time.
+async function ensureBaseSchema() {
+  const client = await pool.connect();
+  try {
+    await client.query('SELECT pg_advisory_lock(727274)');
+    const { rows } = await client.query("SELECT to_regclass('public.services') AS t");
+    if (!rows[0].t) {
+      const sql = require('fs').readFileSync(require('path').join(__dirname, '..', 'db', 'init.sql'), 'utf8');
+      await client.query(sql);
+      console.log('Initialized empty database from db/init.sql');
+    }
+  } finally {
+    await client.query('SELECT pg_advisory_unlock(727274)').catch(() => {});
+    client.release();
+  }
+}
+
 async function runSchema() {
+  await ensureBaseSchema();
   await pool.query(`
     CREATE TABLE IF NOT EXISTS site_content (
       id SMALLINT PRIMARY KEY CHECK (id = 1),

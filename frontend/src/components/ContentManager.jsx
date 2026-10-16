@@ -70,7 +70,7 @@ function ImageField({ label, value, onChange, upload }) {
           {busy ? 'Envoi en cours…' : 'Importer une image'}
           <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleFile} disabled={busy} hidden />
         </label>
-        <span className="meta">JPEG, PNG, WebP ou GIF · 8 Mo max</span>
+        <span className="meta">JPEG, PNG, WebP ou GIF · 4 Mo max</span>
       </div>
       {message && <p className="error" role="alert">{message}</p>}
       {value && <img className="image-field-preview" src={value} alt="Aperçu" />}

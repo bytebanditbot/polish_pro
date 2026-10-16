@@ -366,18 +366,44 @@ export default function Admin() {
 
   if (!token) {
     return (
-      <main className="admin-page">
-        <h1>Connexion administrateur</h1>
-        <form className="form" onSubmit={handleLogin}>
-          <label>
-            Mot de passe
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-          </label>
-          <button className="btn" type="submit">Se connecter</button>
-          {loginError && <p className="error">{loginError}</p>}
-        </form>
-        <p><a href="#/">← Retour au site</a></p>
-      </main>
+      <div
+        className="admin-login-backdrop"
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) window.location.hash = '#/'
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') window.location.hash = '#/'
+        }}
+      >
+        <div className="admin-login-card" role="dialog" aria-modal="true" aria-labelledby="admin-login-title">
+          <div className="admin-login-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="4.5" y="10.5" width="15" height="10" rx="2.5" />
+              <path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" />
+            </svg>
+          </div>
+          <p className="admin-login-eyebrow">Espace privé</p>
+          <h1 id="admin-login-title">Connexion administrateur</h1>
+
+          <form className="admin-login-form" onSubmit={handleLogin}>
+            <label htmlFor="admin-password">Mot de passe</label>
+            <input
+              id="admin-password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Saisissez votre mot de passe"
+              autoComplete="current-password"
+              autoFocus
+              required
+            />
+            {loginError && <p className="admin-login-error" role="alert">{loginError}</p>}
+            <button className="btn" type="submit">Se connecter</button>
+          </form>
+
+          <a className="admin-login-back" href="#/">← Retour au site</a>
+        </div>
+      </div>
     )
   }
 

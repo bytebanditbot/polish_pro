@@ -39,3 +39,11 @@ log in and set the Gmail account under **E-mail**.
 - **Gmail conversation sync** (IMAP) opens a new connection per request; the function timeout is set to 30 s.
 - Cold starts re-run the idempotent schema checks once per instance; the very first request on an empty database also creates the tables.
 - The Docker `backup` service does not apply here: use Neon's backups / point-in-time restore.
+
+## Troubleshooting
+
+- Open `/api/ping`: it answers without Express or the database, shows the deployed commit and whether
+  `DATABASE_URL`, `ADMIN_PASSWORD`, `JWT_SECRET` and `ENCRYPTION_KEY` are set (true/false only).
+  If `/api/ping` works but `/api/health` does not, the problem is in the app/database, not in the Vercel setup.
+- Settings -> General: Root Directory must be empty and Application Preset must be "Other".
+- A "Redeploy" rebuilds the old commit. To build the latest one, push a new commit or open a Deploy Hook URL.

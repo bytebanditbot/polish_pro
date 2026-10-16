@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "description": "Polish Pro - Vercel root (serverless API in ./api + static frontend built from ./frontend)",
-  "engines": { "node": "20.x" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "db:init": "node scripts/init-db.js"
   },
